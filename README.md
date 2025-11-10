@@ -6,9 +6,9 @@ The purpose of this project is to analyze the daily bike-sharing dataset from th
 ## 📂 Folder Structure
 - **`data/raw`**: Original, unprocessed data  
 
-- **`data/processed`**: Cleaned, merged, and transformed data  
+- **`data/processed`**: Cleaned and processed data  
 
-- **`scripts/`**: Modular R scripts containing functions to reuse across analyses  
+- **`scripts/`**: R scripts and markdown files containing code  
 
 ## ⚙️ How to Start Working
 
@@ -19,3 +19,15 @@ git clone https://github.com/anamasurquijo/Machine-Learning.git
 
 ### Make changes and push R scipts + updated data files. 
 **Note: DO NOT push the .Rproj file as this will lead to incompatibility between package versions and local system versions** 
+```bash
+// to push your saved changes -> 
+git diff
+git status
+git add <file-names>
+git commit -m "Your commit message"
+git push origin main
+
+// to pull changes from upstream -> 
+git fetch origin main
+git merge
+```

@@ -1,0 +1,1 @@
+This folder contains the saved and already run models as RDS files for re-use and faster processing of the R markdown file. 
