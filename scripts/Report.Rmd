@@ -81,16 +81,16 @@ bike <- read.csv("../data/raw/hour.csv")
 
 # Display structure
 str(bike)
-colSums(is.na(bike))
+# colSums(is.na(bike)) ## No NAs returned
 ```
 
 The dataset includes:
 
 - **Temporal features**: Date, hour, season, month, year, weekday, holiday, working day
 - **Weather conditions**: Temperature, humidity, wind speed, weather situation
-- **Response variables**: Total rentals (cnt), casual users, registered users
+- **Response variables**: Total rentals, casual users, registered users
 
-All continuous weather variables are normalized (0-1 scale).
+All continuous weather variables are normalized (0-1 scale). There are no NAs in the dataset. 
 
 ## Variable Transformations
 
@@ -111,28 +111,28 @@ bike <- bike %>%
   )
 
 ## Create analysis dataset with proper factor levels
-bike <- bike_data %>%
+bike <- bike %>%
   mutate(
     ## Temporal variables as factors
-    season = factor(season, levels = 1:4, 
+    season = factor(season, levels = 1:4,
                    labels = c("Winter", "Spring", "Summer", "Fall")),
-    'year' = factor('year', levels = 0:1, labels = c("2011", "2012")),
-    'month' = factor('month', levels = 1:12,
+    year = factor(year, levels = 0:1, labels = c("2011", "2012")),
+    month = factor(month, levels = 1:12,
                    labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")),
-    'hour' = factor('hour'),
+    hour = factor(hour),
     weekday = factor(weekday, levels = 0:6,
                     labels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")),
     holiday = factor(holiday, levels = 0:1, labels = c("No", "Yes")),
     workingday = factor(workingday, levels = 0:1, labels = c("No", "Yes")),
-    'weather' = factor('weather', levels = 1:4,
+    weather = factor(weather, levels = 1:4,
                        labels = c("Clear or Partly Cloudy", "Mist and Cloudy", "Light Rain or Snow", "Thunder or Ice Storms")),
-    
+
     ## Response variables for different models
-    log_cnt = log(cnt),  
-    high_demand = factor(ifelse(cnt > median(cnt), 1, 0), 
+    log_count = log(count),
+    high_demand = factor(ifelse(count > median(count), 1, 0),
                         levels = c(0, 1), labels = c("Low", "High")),
-    reg_percentage = registered / (cnt)
+    reg_percentage = registered / (count)
   )
 
 str(bike)
@@ -155,7 +155,7 @@ bike %>%
                      min(casual), max(casual)),
     Registered_Users = c(mean(registered), median(registered), sd(registered),
                          min(registered), max(registered)),
-    Total_Rentals = c(mean(cnt), median(cnt), sd(cnt), min(cnt), max(cnt))
+    Total_Rentals = c(mean(count), median(count), sd(count), min(count), max(count))
   )
 ```
 
@@ -169,14 +169,15 @@ On average, registered users account for roughly 81% of total rentals, while cas
 ## Temporal Patterns
 
 ```{r temporal-plots}
-p1 <- ggplot(bike, aes(x = hr, y = cnt)) +
-  geom_boxplot(fill = "steelblue", alpha = 0.7) +
+p1 <- ggplot(bike, aes(x = as.numeric(as.character(hour)), y = count)) +
+  geom_point(alpha = 0.15, color = "steelblue", size = 1) +
+  geom_smooth(method = "loess", se = TRUE, color = "darkblue", linewidth = 1.2) +
+  scale_x_continuous(breaks = seq(0, 23, by = 3)) +
   labs(title = "Hourly Demand Distribution", 
        x = "Hour of Day", y = "Total Rentals") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme_minimal()
 
-p2 <- ggplot(bike, aes(x = season, y = cnt, fill = season)) +
+p2 <- ggplot(bike, aes(x = season, y = count, fill = season)) +
   geom_boxplot(alpha = 0.7) +
   scale_fill_brewer(palette = "Set2") +
   labs(title = "Seasonal Demand Patterns", 
@@ -187,21 +188,22 @@ p2 <- ggplot(bike, aes(x = season, y = cnt, fill = season)) +
 grid.arrange(p1, p2, ncol = 2)
 ```
 
-**Key Insights**: Clear morning (8am) and evening (5-6pm) commuter peaks. Fall shows highest demand, while Spring has lowest. This suggests targeting bike availability at stations near business districts during rush hours.
+**Key Insights**: Clear bimodal pattern with peaks at 8am and 5pm indicates commuter-driven demand, while overnight hours (0-5am) show minimal activity. Summer and Fall exhibit highest median demand (~180 rentals), while Winter shows lowest (~100 rentals), suggesting weather-dependent cycling behavior and need for seasonal fleet adjustments.
+
 
 ## Weather Effects
 
 ```{r weather-plots}
-p3 <- ggplot(bike, aes(x = temp, y = cnt)) +
+p3 <- ggplot(bike, aes(x = temp, y = count)) +
   geom_point(alpha = 0.2, color = "coral") +
   geom_smooth(method = "loess", se = TRUE, color = "darkred", linewidth = 1.2) +
   labs(title = "Temperature vs. Demand", 
        x = "Normalized Temperature", y = "Total Rentals") +
   theme_minimal()
 
-p4 <- ggplot(bike, aes(x = weathersit, y = cnt, fill = weathersit)) +
+p4 <- ggplot(bike, aes(x = weather, y = count, fill = weather)) +
   geom_boxplot(alpha = 0.7) +
-  scale_fill_brewer(palette = "Set1") +
+  scale_fill_brewer(palette = "Set2") +
   labs(title = "Weather Condition Impact", 
        x = "Weather Situation", y = "Total Rentals") +
   theme_minimal() +
@@ -210,7 +212,8 @@ p4 <- ggplot(bike, aes(x = weathersit, y = cnt, fill = weathersit)) +
 grid.arrange(p3, p4, ncol = 2)
 ```
 
-**Key Insights**: Strong positive relationship between temperature and demand (up to ~0.7 normalized temp), then slight decline. Clear weather drives highest demand; light rain reduces rentals by ~40%. This informs dynamic pricing strategies during adverse weather.
+**Key Insights**: Strong positive relationship between temperature and demand up to 0.7 normalized temperature, with high variance indicating hour-of-day effects dominate at moderate temperatures. Clear weather yields median ~150 rentals versus ~100 in light rain/snow, representing 33% demand reduction that justifies dynamic pricing and proactive bike re-positioning during poor weather forecasts.
+
 
 \newpage
 
