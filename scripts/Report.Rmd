@@ -32,6 +32,7 @@ library(gridExtra)
 library(knitr)
 library(corrplot)
 library(reshape2)
+library(caret)
 
 ## Set seed for reproducibility
 set.seed(81)
@@ -308,7 +309,7 @@ cat("\nClass distribution in test set:\n")
 table(test$high_demand) %>% prop.table() %>% print()
 ```
 
-**Why Train-Test Split is Essential**:
+**Why we chose an 80/20:Train/Test Split? **:
 
 1. **Prevents Overfitting**: If we evaluate models on the same data used for training, complex models (like neural networks) will appear artificially perfect. The test set reveals true generalization performance.
 
@@ -316,12 +317,11 @@ table(test$high_demand) %>% prop.table() %>% print()
 
 3. **Enables Fair Comparison**: By evaluating all models on identical test data, we ensure performance differences reflect model quality, not data variation.
 
-4. **Stratified Sampling**: We use `createDataPartition()` to maintain the same high/low demand ratio in both sets, preventing train-test distribution mismatch.
+4. **Stratified Sampling**: We use `createDataPartition()` to maintain similar class distribution in both sets, preventing train-test distribution mismatch.
 
 **Business Relevance**: A model with 90% training accuracy but 60% test accuracy is unreliable for operational planning. The test set ensures we deploy models that actually work when bike demand forecasts matter most.
 
 ## Linear Model (LM) - Total Demand Forecasting
-**Lead Analyst: Student1_Lead**
 
 We model log-transformed total rentals to handle the multiplicative nature of demand (amounts should be log-transformed). This provides interpretable coefficients for stakeholders.
 
@@ -359,7 +359,6 @@ cat("R-squared:", round(lm_r2, 3), "\n")
 **Business Value**: Provides baseline forecasts for daily/hourly bike allocation with clear seasonal adjustments.
 
 ## GLM Poisson - Casual User Modeling
-**Lead Analyst: Student2_Lead**
 
 Casual users represent growth opportunities. We model their counts using Poisson regression to respect the discrete nature of this variable.
 
@@ -369,8 +368,8 @@ if (file.exists("../models/glm_poisson.rds")) {
   glm_poisson <- readRDS("../models/glm_poisson.rds")
 } else {
   # Fit Poisson GLM for casual users
-  glm_poisson <- glm(casual ~ season + yr + hr + holiday + weekday + 
-                       weathersit + temp + hum + windspeed,
+  glm_poisson <- glm(casual ~ season + year + hour + holiday + weekday + 
+                       weather + temp + humidity + windspeed,
                      family = poisson(link = "log"),
                      data = train)
   # Save model
@@ -378,23 +377,35 @@ if (file.exists("../models/glm_poisson.rds")) {
 }
 
 # Key coefficients
-summary(glm_poisson)$coefficients[1:8, ] %>%
-  kable(digits = 3, caption = "Poisson GLM Coefficients (First 8)")
+summary(glm_poisson)
 
 # Predictions and performance
 glm_pois_pred <- predict(glm_poisson, newdata = test, type = "response")
 glm_pois_rmse <- sqrt(mean((test$casual - glm_pois_pred)^2))
+glm_pois_mae <- mean(abs(test$casual - glm_pois_pred))
+glm_pois_r_squared <- cor(test$casual, glm_pois_pred)^2
 
 cat("\nPoisson GLM Performance:\n")
-cat("RMSE:", round(glm_pois_rmse, 2), "\n")
+cat("MAE:", round(glm_pois_mae, 2), "\n")
+cat("R²:", round(glm_pois_r_squared, 2), "\n")
 ```
+### Interpretation
 
-**Interpretation**: Holidays dramatically increase casual users (exp(coef) ≈ 1.9x), while working days reduce them. Midday hours (10am-3pm) show peak casual usage, contrasting with registered users' commuter pattern.
+**Baseline Prediction**: In Winter, on a Sunday at midnight (hour 0), with clear weather in 2011, the predicted casual demand is exp(1.327) ≈ 4 bikes.
 
-**Business Value**: Target marketing campaigns for tourists/leisure riders during holidays and weekends at scenic locations.
+**Key Demand Drivers**:
+
+_Hour of day_: Midday hours (12-2pm) multiply demand by exp(1.72-1.78) ≈ 5.6-5.9× compared to midnight.
+_Temperature_: Going from cold (0.2) to warm (0.8) increases casual riders by exp(2.15×0.6) ≈ 3.5×.
+_Annual growth_: 2012 shows exp(0.37) ≈ 1.45× higher demand than 2011, indicating 45% year-over-year growth in casual users.
+_Weather penalty_: Light rain/snow reduces demand by exp(-0.63) ≈ 47% reduction, while severe weather (thunder/ice) cuts it by exp(-1.30) ≈ 73% reduction.
+_Holiday boost_: Holidays increase casual demand by exp(0.58) ≈ 78% increase, validating leisure-rider targeting.
+
+### Business Value: Target mid-day marketing campaigns for tourists/leisure riders during holidays.
+
+The Poisson model predicts casual rider demand with ±14 bikes accuracy on average and captures 73% of demand patterns. This enables reliable weekend capacity planning and holiday staffing adjustments, though real-time adjustments may still be needed for unexpected events. 
 
 ## GLM Binomial - User Composition Analysis
-**Lead Analyst: Student3_Lead**
 
 Understanding the proportion of registered users helps capacity planning. We model registration proportion using binomial regression.
 
@@ -493,59 +504,61 @@ par(mfrow = c(1, 1))
 Neural networks excel at complex pattern recognition for binary outcomes. We predict whether demand will be "High" (above median).
 
 ```{r nn-model, cache=TRUE, dependson="train-test-split"}
-# Prepare data with numeric predictors only
+## Prepare data with numeric predictors only with binary levels set at 0,1
 train_nn <- train %>%
   mutate(
     season_num = as.numeric(season),
-    yr_num = as.numeric(yr),
-    hr_num = as.numeric(hr),
+    year_num = as.numeric(year),
+    hour_num = as.numeric(hour),
     holiday_num = as.numeric(holiday) - 1,
-    workingday_num = as.numeric(workingday) - 1,
-    weathersit_num = as.numeric(weathersit),
+    weather_num = as.numeric(weather),
     high_demand_num = as.numeric(high_demand) - 1
   )
 
 test_nn <- test %>%
   mutate(
     season_num = as.numeric(season),
-    yr_num = as.numeric(yr),
-    hr_num = as.numeric(hr),
+    year_num = as.numeric(year),
+    hour_num = as.numeric(hour),
     holiday_num = as.numeric(holiday) - 1,
-    workingday_num = as.numeric(workingday) - 1,
-    weathersit_num = as.numeric(weathersit),
+    weather_num = as.numeric(weather),
     high_demand_num = as.numeric(high_demand) - 1
   )
 
-# Check if model already exists
+## Check if model already exists
 if (file.exists("../models/nn_model.rds")) {
   nn_model <- readRDS("../models/nn_model.rds")
 } else {
-  # Fit neural network (single hidden layer with 8 nodes)
-  nn_model <- nnet(high_demand_num ~ season_num + yr_num + hr_num + 
-                     holiday_num + workingday_num + weathersit_num +
-                     temp + hum + windspeed,
+  ## Fit neural network (single hidden layer with 8 nodes)
+  nn_model <- nnet(high_demand_num ~ season_num + year_num + hour_num + 
+                     holiday_num + weather_num + temp + humidity + windspeed,
                    data = train_nn,
                    size = 8,
                    maxit = 200,
                    trace = FALSE)
-  # Save model
+  ## Save model
   saveRDS(nn_model, "../models/nn_model.rds")
 }
 
-# Predictions and performance
 nn_pred_prob <- predict(nn_model, newdata = test_nn, type = "raw")
 nn_pred_class <- ifelse(nn_pred_prob > 0.5, "High", "Low")
-nn_accuracy <- mean(nn_pred_class == test$high_demand)
-nn_conf <- table(Predicted = nn_pred_class, Actual = test$high_demand)
 
-cat("\nNeural Network Performance:\n")
-cat("Accuracy:", round(nn_accuracy * 100, 1), "%\n")
-print(nn_conf)
+## Create confusion matrix object with metrics
+nn_conf_metrics <- confusionMatrix(
+  data = factor(nn_pred_class, levels = c("Low", "High")),
+  reference = factor(test$high_demand, levels = c("Low", "High")),
+  positive = "High"  # Define which class is "positive"
+)
+nn_accuracy <- nn_conf_metrics$overall['Accuracy']
+
+print(nn_conf_metrics)
 ```
 
-**Interpretation**: Neural network achieves strong classification accuracy by learning complex interactions between hour, weather, and temporal features. High recall for high-demand periods ensures sufficient bike availability.
+###Interpretation
 
-**Business Value**: Triggers alerts for high-demand shifts, enabling proactive bike redistribution.
+The model captures complex relationships and interactions, achieving 87.8% accuracy with high recall (91.4%), meaning it successfully identifies 91% of high-demand hours. This enables proactive bike redistribution, though 276 false alarms (15% false positive rate) suggest occasional over-preparation. 
+
+###Business Value: Trigger alerts for high-demand shifts, enabling proactive bike redistribution.
 
 ## Support Vector Machine - Robust Demand Classification
 
