@@ -147,7 +147,7 @@ saveRDS(bike, "../data/processed/bike_cleaned.rds")
 
 Understanding the distinction between casual and registered users is crucial for targeted strategies.
 
-```{r user-type-summary}
+```{r user-type-summary, cache = TRUE}
 # Comparative statistics for user types
 bike %>%
   summarise(
@@ -169,7 +169,7 @@ On average, registered users account for roughly 81% of total rentals, while cas
 
 ## Temporal Patterns
 
-```{r temporal-plots}
+```{r temporal-plots, cache = TRUE}
 p1 <- ggplot(bike, aes(x = as.numeric(as.character(hour)), y = count)) +
   geom_point(alpha = 0.15, color = "steelblue", size = 1) +
   geom_smooth(method = "loess", se = TRUE, color = "darkblue", linewidth = 1.2) +
@@ -362,6 +362,9 @@ cat("R-squared:", round(lm_r2, 3), "\n")
 
 Casual users represent growth opportunities. We model their counts using Poisson regression to respect the discrete nature of this variable.
 
+### Model choice and dispersion
+The count model was estimated with a Poisson GLM and then re-estimated using a quasi-Poisson family to account for overdispersion. This method flagged certain coefficients that lost significance under quasi fit, specifically severe weather conditions. The quasi-Poisson dispersion parameter was estimated at φ ≈ 9.34, indicating substantially higher variance than a Poisson model assumes.
+
 ```{r glm-poisson, cache=TRUE, dependson="train-test-split"}
 # Check if model already exists
 if (file.exists("../models/glm_poisson.rds")) {
@@ -370,7 +373,7 @@ if (file.exists("../models/glm_poisson.rds")) {
   # Fit Poisson GLM for casual users
   glm_poisson <- glm(casual ~ season + year + hour + holiday + weekday + 
                        weather + temp + humidity + windspeed,
-                     family = poisson(link = "log"),
+                     family = quasipoisson(link = "log"),
                      data = train)
   # Save model
   saveRDS(glm_poisson, "../models/glm_poisson.rds")
@@ -398,10 +401,9 @@ cat("R²:", round(glm_pois_r_squared, 2), "\n")
 _Hour of day_: Midday hours (12-2pm) multiply demand by exp(1.72-1.78) ≈ 5.6-5.9× compared to midnight.
 _Temperature_: Going from cold (0.2) to warm (0.8) increases casual riders by exp(2.15×0.6) ≈ 3.5×.
 _Annual growth_: 2012 shows exp(0.37) ≈ 1.45× higher demand than 2011, indicating 45% year-over-year growth in casual users.
-_Weather penalty_: Light rain/snow reduces demand by exp(-0.63) ≈ 47% reduction, while severe weather (thunder/ice) cuts it by exp(-1.30) ≈ 73% reduction.
 _Holiday boost_: Holidays increase casual demand by exp(0.58) ≈ 78% increase, validating leisure-rider targeting.
 
-### Business Value: Target mid-day marketing campaigns for tourists/leisure riders during holidays.
+### Business Value: Target mid-day marketing campaigns for tourists/leisure riders during holidays, especially on warm days.
 
 The Poisson model predicts casual rider demand with ±14 bikes accuracy on average and captures 73% of demand patterns. This enables reliable weekend capacity planning and holiday staffing adjustments, though real-time adjustments may still be needed for unexpected events. 
 
@@ -502,6 +504,7 @@ par(mfrow = c(1, 1))
 ## Neural Network - High Demand Classification
 
 Neural networks excel at complex pattern recognition for binary outcomes. We predict whether demand will be "High" (above median).
+A single-hidden-layer neural network (8 neurons) was selected, as this architecture is sufficient for low-dimensional tabular data and avoids overfitting. Model tuning experiments showed that adding more layers did not meaningfully improve classification performance relative to the baseline GLM.
 
 ```{r nn-model, cache=TRUE, dependson="train-test-split"}
 ## Prepare data with numeric predictors only with binary levels set at 0,1
@@ -556,9 +559,11 @@ print(nn_conf_metrics)
 
 ###Interpretation
 
-The model captures complex relationships and interactions, achieving 87.8% accuracy with high recall (91.4%), meaning it successfully identifies 91% of high-demand hours. This enables proactive bike redistribution, though 276 false alarms (15% false positive rate) suggest occasional over-preparation. 
+The model captures complex relationships and interactions, achieving 87.8% balanced accuracy, confirming that the model performs consistently across both high and low demand classes. It successfully identifies 91% of high-demand hours. This enables proactive bike redistribution, though 276 false alarms (15% false positive rate) suggest occasional over-preparation. 
 
 ###Business Value: Trigger alerts for high-demand shifts, enabling proactive bike redistribution.
+
+This model is appropriate for operational planning because underestimating demand is more costly than over-preparing.
 
 ## Support Vector Machine - Robust Demand Classification
 
