@@ -8,7 +8,9 @@ The purpose of this project is to analyze the daily bike-sharing dataset from th
 
 - **`data/processed`**: Cleaned and processed data  
 
-- **`scripts/`**: R scripts and markdown files containing code  
+- **`scripts/`**: R scripts and markdown files containing code
+
+- : **`models/`**: Saved models as RDS files
 
 ## ⚙️ How to Start Working
 
