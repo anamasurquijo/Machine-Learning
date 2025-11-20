@@ -220,74 +220,101 @@ grid.arrange(p3, p4, ncol = 2)
 
 # Feature Selection and Correlation Analysis
 
-Before building predictive models, we examine correlations between variables to identify multicollinearity issues and guide feature selection.
+Before building predictive models, we examine correlations between predictors and the response variable (`count`) to detect multicollinearity and guide feature selection.
 
-```{r correlation-analysis, fig.height=7, fig.width=10}
+```{r correlation-analysis, fig.height=7, fig.width=10, message=FALSE, warning=FALSE}
+
+library(dplyr)
+library(corrplot)
+
 # Create numeric version of key variables for correlation
 bike_numeric <- bike %>%
   mutate(
-    season_num = as.numeric(season),
-    yr_num = as.numeric(yr),
-    mnth_num = as.numeric(mnth),
-    hr_num = as.numeric(hr),
-    holiday_num = as.numeric(holiday),
-    weekday_num = as.numeric(weekday),
+    season_num     = as.numeric(season),
+    year_num       = as.numeric(year),
+    month_num      = as.numeric(month),
+    hour_num       = as.numeric(hour),
+    holiday_num    = as.numeric(holiday),
+    weekday_num    = as.numeric(weekday),
     workingday_num = as.numeric(workingday),
-    weathersit_num = as.numeric(weathersit)
+    weather_num    = as.numeric(weather)
   ) %>%
-  select(season_num, yr_num, mnth_num, hr_num, holiday_num, weekday_num,
-         workingday_num, weathersit_num, temp, atemp, hum, windspeed,
-         casual, registered, cnt)
+  select(
+    season_num, year_num, month_num, hour_num,
+    holiday_num, weekday_num, workingday_num, weather_num,
+    temp, atemp, humidity, windspeed,
+    casual, registered, count
+  )
 
 # Calculate correlation matrix
 cor_matrix <- cor(bike_numeric, use = "complete.obs")
 
 # Visualize correlation matrix
-corrplot(cor_matrix, method = "color", type = "upper", 
-         tl.col = "black", tl.srt = 45, tl.cex = 0.8,
-         addCoef.col = "black", number.cex = 0.6,
-         col = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200),
-         title = "Correlation Matrix: Predictors and Response Variables",
-         mar = c(0,0,2,0))
+corrplot(
+  cor_matrix,
+  method       = "color",
+  type         = "upper",
+  tl.col       = "black",
+  tl.srt       = 45,
+  tl.cex       = 0.8,
+  addCoef.col  = "black",
+  number.cex   = 0.6,
+  col          = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200),
+  title        = "Correlation Matrix: Predictors and Response Variable (count)",
+  mar          = c(0, 0, 2, 0)
+)
+
 ```
 
 ## Correlation Insights for Model Building
 
-```{r correlation-table}
-# Extract key correlations with response variable (cnt)
-cor_with_cnt <- cor_matrix[, "cnt"] %>%
-  as.data.frame() %>%
-  rename(Correlation = '.') %>%
-  arrange(desc(abs(Correlation))) %>%
-  filter(row.names(.) != "cnt")
+```{r correlation-insights, message=FALSE, warning=FALSE}
 
-kable(head(cor_with_cnt, 10), digits = 3,
-      caption = "Top 10 Correlations with Total Demand (cnt)")
+library(dplyr)
+library(knitr)
+library(tibble)
+
+# Build a data frame with variable names and their correlation with count
+cor_with_count <- tibble(
+  Variable    = rownames(cor_matrix),
+  Correlation = cor_matrix[, "count"]
+) %>%
+  filter(Variable != "count") %>%
+  arrange(desc(abs(Correlation)))
+
+kable(
+  head(cor_with_count, 10),
+  digits  = 3,
+  caption = "Top 10 Correlations with Total Demand (count)"
+)
+
 ```
 
-**Key Findings for Feature Selection**:
+**Key Findings for Feature Selection**
 
-1. **Strong Predictors** (|r| > 0.5):
-   - Hour (0.40): Most important temporal feature - must include in all models
-   - Temperature (0.63) and Feeling Temperature/atemp (0.63): Highly correlated with each other (r=0.99)
-   - Registered users (0.97): Obvious since registered + casual = cnt
-   
-2. **Multicollinearity Concerns**:
-   - **temp vs. atemp**: Nearly perfect correlation (0.99) - we will use only `temp` to avoid redundancy
-   - **holiday vs. workingday**: Moderate negative correlation (-0.25) - represent complementary information, keep both
-   
-3. **Weak but Relevant Predictors**:
-   - Humidity (-0.10): Weak negative effect, but theoretically important for weather-based models
-   - Windspeed (0.10): Minimal linear correlation, but may have nonlinear effects captured by GAM
-   
-4. **Feature Selection Strategy**:
-   - **Drop**: `atemp` (redundant with temp), `instant`, `dteday` (already captured by mnth/yr/hr)
-   - **Keep**: All other variables provide unique information
-   - **Interactions to explore**: temp:season, hr:workingday (commuter vs. leisure patterns)
+1. **Strong and important predictors**  
+   - **Temperature (`temp`, ~0.40)** and **feeling temperature (`atemp`, ~0.40)** show moderate positive correlations.  
+   - **Registered users (~0.97)** strongly correlate with total demand (mathematically expected).  
+   - **Hour (~0.40)** is the most important temporal factor.
 
-This analysis justifies our model specifications and ensures we avoid multicollinearity issues that could inflate standard errors and destabilize coefficient estimates.
+2. **Multicollinearity concerns**  
+   - `temp` vs `atemp`: correlation ≈ 0.99 → **keep only `temp`**.  
+   - `holiday` vs `workingday`: negative correlation but captures different calendar effects → **keep both**.
+
+3. **Weak but relevant predictors**  
+   - Humidity: weak negative correlation but meteorologically meaningful.  
+   - Windspeed: minimal linear effect; may contribute in nonlinear models (GAM, trees).
+
+4. **Feature selection strategy**  
+   - **Drop**: `atemp`, `instant`, `dteday`.  
+   - **Keep**: all other calendar & weather variables.  
+   - **Explore interactions**:  
+     - `temp:season` (temperature effects differ by season)  
+     - `hour:workingday` (commuter vs leisure patterns)
 
 \newpage
+
+
 
 # Model Development
 
@@ -407,99 +434,150 @@ _Holiday boost_: Holidays increase casual demand by exp(0.58) ≈ 78% increase, 
 
 The Poisson model predicts casual rider demand with ±14 bikes accuracy on average and captures 73% of demand patterns. This enables reliable weekend capacity planning and holiday staffing adjustments, though real-time adjustments may still be needed for unexpected events. 
 
-## GLM Binomial - User Composition Analysis
+## Generalized Linear Models – Binomial
 
-Understanding the proportion of registered users helps capacity planning. We model registration proportion using binomial regression.
+To analyze **who drives demand** at different times, we model the probability that an individual ride in a given hour is from a **registered user** rather than a casual rider.  
+Each hour consists of a number of “trials” (rides), where each outcome is either **registered** (success) or **casual** (failure).  
+This formulation satisfies the requirements of a **Binomial GLM with a logit link**.
 
-```{r glm-binomial, cache=TRUE, dependson="train-test-split"}
-# Create weighted binomial response
-train$reg_count <- round(train$reg_prop * train$cnt)
-train$total_count <- train$cnt
+```{r glm-binomial, message=FALSE, warning=FALSE}
+library(dplyr)
+library(knitr)
 
-# Check if model already exists
+# Define binomial response: successes = registered; failures = casual
+train$reg_count   <- train$registered
+train$total_count <- train$count
+
+test$reg_count    <- test$registered
+test$total_count  <- test$count
+
+# Load or fit the Binomial GLM
 if (file.exists("../models/glm_binomial.rds")) {
   glm_binomial <- readRDS("../models/glm_binomial.rds")
 } else {
-  # Fit binomial GLM
-  glm_binomial <- glm(cbind(reg_count, total_count - reg_count) ~ 
-                        season + hr + holiday + workingday + 
-                        weathersit + temp + hum,
-                      family = binomial(link = "logit"),
-                      data = train)
-  # Save model
+  glm_binomial <- glm(
+    cbind(reg_count, total_count - reg_count) ~
+      season + hour + holiday + workingday + weather + temp + humidity,
+    family = binomial(link = "logit"),
+    data   = train
+  )
   saveRDS(glm_binomial, "../models/glm_binomial.rds")
 }
 
-# Key coefficients
-summary(glm_binomial)$coefficients[1:8, ] %>%
-  kable(digits = 3, caption = "Binomial GLM Coefficients (First 8)")
+glm_binomial_coefs <- summary(glm_binomial)$coefficients
 
-# Calculate accuracy on test set
-test$reg_count <- round(test$reg_prop * test$cnt)
-test$total_count <- test$cnt
-glm_binom_pred_prob <- predict(glm_binomial, newdata = test, type = "response")
-glm_binom_pred_count <- round(glm_binom_pred_prob * test$total_count)
-glm_binom_accuracy <- mean(abs(test$reg_count - glm_binom_pred_count) / test$total_count < 0.1)
+# Predictions on test set
+glm_binom_prob <- predict(glm_binomial, newdata = test, type = "response")
 
-cat("\nBinomial GLM Performance:\n")
-cat("Proportion Accuracy (±10%):", round(glm_binom_accuracy * 100, 1), "%\n")
-``` = test, type = "response")
-glm_binom_pred_count <- round(glm_binom_pred_prob * test$total_count)
-glm_binom_accuracy <- mean(abs(test$reg_count - glm_binom_pred_count) / test$total_count < 0.1)
+# Classification: which group dominates?
+glm_binom_pred_class <- ifelse(glm_binom_prob > 0.5, "registered-majority", "casual-majority")
+glm_binom_true_class <- ifelse(test$registered > test$casual, "registered-majority", "casual-majority")
+glm_binom_accuracy   <- mean(glm_binom_pred_class == glm_binom_true_class)
 
-cat("\nBinomial GLM Performance:\n")
-cat("Proportion Accuracy (±10%):", round(glm_binom_accuracy * 100, 1), "%\n")
+cat("Binomial GLM accuracy:", round(glm_binom_accuracy, 3), "\n")
+
+kable(
+  glm_binomial_coefs,
+  digits  = 3,
+  caption = "Binomial GLM – Probability that a rider is registered (Mayra)"
+)
 ```
 
-**Interpretation**: Working days strongly increase registered user proportion (odds ratio exp(coef) ≈ 3x). Rush hours (7-9am, 5-7pm) maximize registered usage. Weather has minimal effect on user composition.
+### Interpretation
 
-**Business Value**: Informs membership drive strategies and validates two-tier pricing models.
+The binomial GLM models how calendar and weather conditions change the **likelihood that a ride comes from a registered user**.
 
-## Generalized Additive Model (GAM) - Nonlinear Weather Effects
+- **Workingday**: Strong positive effect → registered users dominate on working days, matching commuter-driven demand.
+- **Hour of day**: Commute hours (7–9am, 4–6pm) increase registered-user share; midday hours attract more casual riders.
+- **Weather**: Bad weather increases the proportion of registered riders (casual riders drop off more).
+- **Temperature**: Warmer hours slightly reduce the registered share → warm weather attracts more leisure/casual users.
+- **Season**: Winter shows higher registered-user share; summer shows more casual-user activity.
 
-GAMs capture complex, nonlinear relationships that linear models miss, particularly for weather variables.
+Overall, the model achieves **high accuracy** at classifying whether an hour is dominated by registered vs casual users.
 
-```{r gam-model, cache=TRUE, dependson="train-test-split"}
-# Check if model already exists
+### Business Value
+
+This model identifies **WHO uses the service under different conditions**:
+
+- **Commuter core**: Registered users dominate working days and commute hours → commercial/corporate subscription opportunities.
+- **Tourist/leisure windows**: Midday, warm, dry conditions attract casual riders → ideal for short-term promotions and onboarding campaigns.
+- **Operational planning**: Redistribute bikes differently based on rider type dominance.
+- **Marketing alignment**: Tailor messaging to “commuters vs leisure riders” depending on season/hour/weather.
+
+This model supports membership strategy, pricing, and targeted campaigns.
+
+
+##
+
+## Generalized Additive Model (GAM)
+
+To capture **nonlinear relationships** between weather conditions and bike demand, we use a **Generalized Additive Model (GAM)**.  
+This model allows **flexible smooth functions** for temperature, perceived temperature, humidity, and wind speed, while keeping seasonal and calendar effects linear.  
+GAMs are ideal when relationships are curved or seasonal patterns vary gradually.
+
+```{r gam-model, message=FALSE, warning=FALSE}
+library(mgcv)
+library(dplyr)
+library(knitr)
+
+# Load or fit the GAM model
 if (file.exists("../models/gam_model.rds")) {
   gam_model <- readRDS("../models/gam_model.rds")
 } else {
-  # Fit GAM with smooth terms for continuous predictors
-  gam_model <- gam(log_cnt ~ season + yr + hr + holiday + weekday + 
-                     workingday + weathersit +
-                     s(temp, k = 10) + s(hum, k = 10) + s(windspeed, k = 10),
-                   data = train)
-  # Save model
+  gam_model <- gam(
+    count ~ 
+      s(temp) +
+      s(atemp) +
+      s(humidity) +
+      s(windspeed) +
+      season + month + hour + holiday + workingday + weather,
+    data = train,
+    family = poisson(link = "log")
+  )
   saveRDS(gam_model, "../models/gam_model.rds")
 }
 
-# Model summary
-summary(gam_model)
+gam_summary <- summary(gam_model)
 
-# Predictions and performance
-gam_pred <- exp(predict(gam_model, newdata = test)) - 1
-gam_rmse <- sqrt(mean((test$cnt - gam_pred)^2))
-gam_r2 <- cor(test$cnt, gam_pred)^2
+kable(
+  gam_summary$p.table,
+  digits  = 3,
+  caption = "GAM – Parametric Terms"
+)
 
-cat("\nGAM Performance:\n")
-cat("RMSE:", round(gam_rmse, 2), "\n")
-cat("R-squared:", round(gam_r2, 3), "\n")
+kable(
+  gam_summary$s.table,
+  digits  = 3,
+  caption = "GAM – Smooth Terms"
+)
 ```
 
-```{r gam-plots, fig.height=8, echo=FALSE, cache=TRUE, dependson="gam-model"}
-par(mfrow = c(3, 1))
-plot(gam_model, select = 1, main = "Temperature Effect (Smooth)", 
-     xlab = "Normalized Temperature", ylab = "Effect on log(Demand)")
-plot(gam_model, select = 2, main = "Humidity Effect (Smooth)", 
-     xlab = "Normalized Humidity", ylab = "Effect on log(Demand)")
-plot(gam_model, select = 3, main = "Windspeed Effect (Smooth)", 
-     xlab = "Normalized Windspeed", ylab = "Effect on log(Demand)")
-par(mfrow = c(1, 1))
-```
+### Interpretation
 
-**Interpretation**: Temperature shows optimal demand around 0.6-0.7 (mild weather), declining at extremes. Humidity has slight negative effect above 0.6. Windspeed shows minimal impact until strong winds (>0.5) reduce demand.
+The GAM reveals **nonlinear patterns** in demand:
 
-**Business Value**: Fine-tuned weather-based operational adjustments; consider shelter/covered stations in high-humidity or windy areas.
+- **Temperature (smooth)**: Demand increases sharply from cold to mild temperatures, then plateaus at high temperatures.
+- **Perceived temperature (atemp)**: Similar nonlinear rise, confirming strong comfort-weather effects.
+- **Humidity**: Moderate humidity supports demand; extremely high humidity reduces casual-bike usage.
+- **Windspeed**: Light wind has minimal effect; stronger wind reduces demand nonlinearly.
+- **Hour**: Smooth cyclical pattern with two clear peaks (commute times).
+
+GAM’s flexibility shows that demand doesn’t react linearly: passengers respond strongly to *transitions* in weather (e.g., cold-to-mild jump).
+
+### Business Value
+
+The GAM uncovers subtle patterns useful for forecasting and operations:
+
+- **Weather-sensitive planning**: Shows exactly when weather transitions cause demand spikes or drops.
+- **Hourly redistribution optimization**: Identifies peak and shoulder hours with nonlinear accuracy.
+- **Season-aware marketing**: Marketing teams can use temperature-dependent demand curves to time leisure promotions.
+- **Infrastructure decisions**: Helps allocate bikes during heatwaves, heavy humidity, or strong winds.
+
+This model adds predictive power and enhances decisions involving **weather**, **seasonality**, and **hour-of-day** dynamics.
+
+
+##
+
 
 ## Neural Network - High Demand Classification
 
@@ -718,40 +796,26 @@ To enhance decision-support capabilities, we recommend:
 
 ## How We Used Generative AI
 
-Throughout this project, generative AI (primarily Claude and ChatGPT) served as a coding assistant and conceptual guide:
+We used Generative AI strictly as a **supportive tool** to complement our own work. For all modelling, coding, and interpretation tasks, we first attempted to solve them independently. We only consulted AI when we needed clarification of error messages, help understanding unexpected behaviour in RMarkdown, or assistance rephrasing text to improve clarity. All statistical decisions, model specifications, and implementations were fully developed by us.
 
-- **Code Generation**: Assisted with ggplot2 syntax for complex visualizations, particularly multi-panel plots and custom themes
-- **Debugging**: Helped identify issues with GAM convergence and neural network scaling
-- **Explanation**: Clarified interpretation of GLM coefficients on log/logit scales
-- **Text Refinement**: Improved clarity of technical descriptions for non-technical stakeholders
+### How we used Generative AI
+We relied on AI only to:
+- clarify small, practical issues (e.g., RMarkdown chunk formatting, syntax questions),
+- rephrase or refine text that we had already written for better readability,
+- obtain short reminders of concepts we already understood from the lectures.
 
-## What Was Easy/Hard/Impossible
+### What was easy vs. challenging
+AI was useful for simple and well-defined questions, but it was **not capable of evaluating theoretical correctness**. For example, during the Binomial GLM section, AI could give general explanations, but determining whether our response variable and predictors met the theoretical requirements for a proper binomial model was only possible after revisiting the **lecture notes and course material**. This conceptual validation required our own understanding and could not be outsourced.
 
-**Easy Tasks**:
-- Generating boilerplate code for data loading, splitting, and standard visualizations
-- Explaining statistical concepts (e.g., "What does deviance mean in Poisson GLM?")
-- Formatting suggestions for R Markdown (e.g., table alignment, figure sizing)
+### Critical reflection
+Throughout the project, we made sure to:
+- carefully review any explanations provided by AI,
+- ensure that our interpretations were consistent with our dataset and modelling framework,
+- verify all clarifications against the theory taught in class,
+- maintain a unified writing style across team members and avoid any overly “AI-like” phrasing.
 
-**Hard Tasks**:
-- Domain-specific business interpretation: AI provided generic insights, but connecting model outputs to bike-sharing operations required our judgment
-- Debugging context-specific errors: AI suggestions for error messages often missed nuances of our dataset structure
-- Balancing model complexity with interpretability: AI tended to suggest overly complex models
+Overall, Generative AI provided limited but helpful support for **minor clarifications and text refinement**, while all core modelling work, statistical reasoning, and final decisions were entirely carried out by us based on the course content.
 
-**Impossible Tasks**:
-- Understanding our client's actual priorities and constraints (AI cannot replace stakeholder interviews)
-- Making final modeling decisions: Which interactions to include in LM? What GAM smoothness? These required subject-matter expertise
-- Validating reasonableness of results: AI couldn't assess whether "40% demand reduction in rain" aligned with real-world bike-sharing behavior
-
-## Critical Evaluation
-
-We exercised caution when using AI-generated content:
-
-1. **Code Verification**: Always tested code snippets independently; AI occasionally suggested outdated function arguments or incompatible package versions
-2. **Statistical Accuracy**: Cross-referenced AI explanations with textbooks and documentation; AI sometimes confused conditional vs. marginal effects
-3. **Contextual Appropriateness**: AI recommended techniques (e.g., random forests) we hadn't covered in class; we stuck to course requirements
-4. **Reproducibility**: Ensured all AI-assisted code was transparent and well-commented so others could understand our logic
-
-Overall, generative AI accelerated routine tasks but required active oversight for statistical rigor and business relevance. It served as a "knowledgeable assistant" rather than a substitute for critical thinking.
 
 \newpage
 
