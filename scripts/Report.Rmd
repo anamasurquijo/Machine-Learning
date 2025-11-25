@@ -391,40 +391,13 @@ table(test$high_demand) %>% prop.table() %>% print()
 
 ## Linear Model (LM) - Total Demand Forecasting
 
-We model log-transformed total rentals to handle the multiplicative nature of demand (amounts should be log-transformed). This provides interpretable coefficients for stakeholders.
+```{r}
 
-```{r lm-model, cache=TRUE, dependson="train-test-split"}
-# Check if model already exists
-if (file.exists("../models/lm_model.rds")) {
-  lm_model <- readRDS("../models/lm_model.rds")
-} else {
-  # Fit comprehensive linear model with interactions
-  # Note: Using temp (not atemp) based on correlation analysis
-  lm_model <- lm(log_cnt ~ season + yr + mnth + hr + holiday + weekday + 
-                   workingday + weathersit + temp + hum + windspeed + 
-                   temp:season + hr:workingday + temp:weathersit,
-                 data = train)
-  # Save model
-  saveRDS(lm_model, "../models/lm_model.rds")
-}
-
-# Model summary (truncated for brevity)
-summary(lm_model)$coefficients[1:10, ] %>% 
-  kable(digits = 3, caption = "Linear Model Coefficients (First 10)")
-
-# Predictions and performance
-lm_pred <- exp(predict(lm_model, newdata = test)) - 1  # Back-transform
-lm_rmse <- sqrt(mean((test$cnt - lm_pred)^2))
-lm_r2 <- cor(test$cnt, lm_pred)^2
-
-cat("\nLinear Model Performance:\n")
-cat("RMSE:", round(lm_rmse, 2), "\n")
-cat("R-squared:", round(lm_r2, 3), "\n")
 ```
 
-**Interpretation**: Year 2012 shows significant demand increase (exp(coef) ≈ 2x growth), indicating business expansion. Temperature coefficient (~3.5) suggests a 1-unit increase in normalized temperature multiplies demand by exp(3.5) ≈ 33 times (across full range). Working day interactions reveal distinct commuter vs. leisure patterns.
+**Interpretation**: 
 
-**Business Value**: Provides baseline forecasts for daily/hourly bike allocation with clear seasonal adjustments.
+**Business Value**: 
 
 ## GLM Poisson - Casual User Modeling
 
@@ -701,100 +674,28 @@ This model is appropriate for operational planning because underestimating deman
 
 ## Support Vector Machine - Robust Demand Classification
 
-SVMs provide an alternative robust classifier, particularly effective with nonlinear decision boundaries.
+```{r}
 
-```{r svm-model, cache=TRUE, dependson="train-test-split"}
-# Check if model already exists
-if (file.exists("models/svm_model.rds")) {
-  svm_model <- readRDS("models/svm_model.rds")
-} else {
-  # Fit SVM with radial basis kernel
-  svm_model <- svm(high_demand ~ season + yr + hr + holiday + workingday + 
-                     weathersit + temp + hum + windspeed,
-                   data = train,
-                   kernel = "radial",
-                   cost = 10,
-                   gamma = 0.1)
-  # Save model
-  saveRDS(svm_model, "models/svm_model.rds")
-}
-
-# Predictions and performance
-svm_pred <- predict(svm_model, newdata = test)
-svm_accuracy <- mean(svm_pred == test$high_demand)
-svm_conf <- table(Predicted = svm_pred, Actual = test$high_demand)
-
-cat("\nSVM Performance:\n")
-cat("Accuracy:", round(svm_accuracy * 100, 1), "%\n")
-print(svm_conf)
 ```
 
-**Interpretation**: SVM achieves comparable accuracy to neural networks with potentially better generalization on new patterns. The radial kernel captures complex boundaries between high/low demand states.
+**Interpretation**:
 
-**Business Value**: Provides complementary classification for ensemble decision-making; reduces false negatives (missed high-demand periods).
+**Business Value**: Provides complementary classification for ensemble decision-making; reduces false negatives (mi
 
 \newpage
 
 # Model Comparison and Cross-Validation
 
-We perform 5-fold cross-validation on SVMs with different hyperparameters to optimize classification:
+```{r}
 
-```{r cv-svm}
-# Cross-validation for SVM cost parameter
-cost_values <- c(1, 10, 100)
-cv_results <- data.frame(Cost = numeric(), Accuracy = numeric())
-
-for (cost_val in cost_values) {
-  cv_folds <- createFolds(train$high_demand, k = 5)
-  fold_accuracy <- numeric(5)
-  
-  for (i in 1:5) {
-    fold_train <- train[-cv_folds[[i]], ]
-    fold_valid <- train[cv_folds[[i]], ]
-    
-    svm_cv <- svm(high_demand ~ season + yr + hr + holiday + workingday + 
-                    weathersit + temp + hum + windspeed,
-                  data = fold_train,
-                  kernel = "radial",
-                  cost = cost_val,
-                  gamma = 0.1)
-    
-    fold_pred <- predict(svm_cv, fold_valid)
-    fold_accuracy[i] <- mean(fold_pred == fold_valid$high_demand)
-  }
-  
-  cv_results <- rbind(cv_results, 
-                      data.frame(Cost = cost_val, 
-                                Accuracy = mean(fold_accuracy)))
-}
-
-cv_results %>%
-  kable(digits = 3, caption = "SVM Cross-Validation Results")
 ```
 
-**Findings**: Cost parameter of 10 provides optimal balance between complexity and generalization.
+**Findings**:
 
 ## Overall Model Performance Summary
 
-```{r performance-summary}
-# Compile all performance metrics
-performance <- data.frame(
-  Model = c("Linear Model", "GAM", "Poisson GLM", "Binomial GLM", 
-            "Neural Network", "SVM"),
-  Task = c("Total Demand", "Total Demand", "Casual Users", "User Composition",
-           "High Demand Class", "High Demand Class"),
-  Metric = c(paste("RMSE:", round(lm_rmse, 2)),
-             paste("RMSE:", round(gam_rmse, 2)),
-             paste("RMSE:", round(glm_pois_rmse, 2)),
-             paste("Accuracy:", round(glm_binom_accuracy * 100, 1), "%"),
-             paste("Accuracy:", round(nn_accuracy * 100, 1), "%"),
-             paste("Accuracy:", round(svm_accuracy * 100, 1), "%")),
-  Business_Use = c("Daily forecasting", "Weather-sensitive forecasting",
-                   "Marketing targeting", "Membership strategy",
-                   "Alert system", "Operational planning")
-)
+```{r}
 
-kable(performance, caption = "Model Performance and Business Applications")
 ```
 
 \newpage
@@ -803,48 +704,11 @@ kable(performance, caption = "Model Performance and Business Applications")
 
 ## Key Findings
 
-Our comprehensive analysis reveals five actionable insights for optimizing bike-sharing operations:
-
-1. **Temporal Patterns Drive Demand**: Clear commuter peaks (8am, 5-6pm) and seasonal variation (Fall peak, Spring trough) enable predictable bike allocation. The 2011-2012 growth trajectory (~2x increase) demonstrates market expansion potential.
-
-2. **Weather Sensitivity Varies by Metric**: Temperature optimum around 0.6-0.7 normalized scale; light rain reduces demand by 40%. However, weather has minimal effect on registered vs. casual user composition, suggesting loyal riders adapt while casual users avoid adverse conditions.
-
-3. **User Segmentation Informs Strategy**: Registered users dominate working days (82%), while casual users increase weekends. This validates targeted approaches: commuter-route optimization weekdays, leisure-route emphasis weekends.
-
-4. **Nonlinear Relationships Matter**: GAM reveals complex weather effects missed by linear models, particularly temperature's inverted-U relationship. This justifies dynamic pricing/availability strategies.
-
-5. **Classification Models Enable Proactive Management**: Neural networks and SVMs predict high-demand periods with >85% accuracy, allowing proactive bike redistribution before shortages occur.
-
 ## Operational Recommendations
-
-**Immediate Actions** (Next Quarter):
-- Implement hour-based bike allocation: 40% surplus at 7-9am and 5-7pm near business districts
-- Launch targeted casual-user campaigns during holidays/weekends at scenic routes
-- Install weather-protected stations in high-wind or frequent-rain areas
-
-**Strategic Initiatives** (Next Year):
-- Deploy high-demand alert system using NN/SVM ensemble
-- Expand Fall capacity (+30% fleet) to capitalize on peak seasonal demand
-- Develop two-tier pricing: dynamic pricing for casual users, stable rates for registered users
 
 ## Limitations
 
-While our models demonstrate strong predictive power, several limitations warrant consideration:
-
-1. **Data Scope**: Analysis based on 2011-2012 data; post-pandemic behavior may differ significantly
-2. **External Factors**: Models omit events (concerts, sports), construction, or transit disruptions
-3. **Spatial Dynamics**: Hourly aggregates mask station-level variation; neighborhood-specific models would improve redistribution logistics
-4. **Causal Inference**: Predictive models identify correlations but cannot confirm causal mechanisms (e.g., weather causes demand vs. both influenced by third factor)
-
 ## Future Work
-
-To enhance decision-support capabilities, we recommend:
-
-1. **Spatial Modeling**: Develop station-level forecasts using geographic data and network flow analysis
-2. **Temporal Granularity**: 15-minute predictions for intra-hour variability during peak periods
-3. **Ensemble Methods**: Combine model predictions (e.g., weighted average of LM, GAM, NN) for robust forecasts
-4. **Real-time Integration**: Deploy models via API for live dashboard updating as conditions change
-5. **Causal Analysis**: Conduct A/B tests for pricing/availability interventions to validate model assumptions
 
 \newpage
 
