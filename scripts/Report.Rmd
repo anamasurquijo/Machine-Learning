@@ -33,6 +33,11 @@ library(knitr)
 library(corrplot)
 library(reshape2)
 library(caret)
+library(dplyr)
+library(tibble)
+library(mgcv)
+
+
 
 ## Set seed for reproducibility
 set.seed(81)
@@ -224,9 +229,6 @@ Before building predictive models, we examine correlations between predictors an
 
 ```{r correlation-analysis, fig.height=7, fig.width=10, message=FALSE, warning=FALSE}
 
-library(dplyr)
-library(corrplot)
-
 # Create numeric version of key variables for correlation
 bike_numeric <- bike %>%
   mutate(
@@ -269,10 +271,6 @@ corrplot(
 ## Correlation Insights for Model Building
 
 ```{r correlation-insights, message=FALSE, warning=FALSE}
-
-library(dplyr)
-library(knitr)
-library(tibble)
 
 # Build a data frame with variable names and their correlation with count
 cor_with_count <- tibble(
@@ -441,8 +439,6 @@ Each hour consists of a number of “trials” (rides), where each outcome is ei
 This formulation satisfies the requirements of a **Binomial GLM with a logit link**.
 
 ```{r glm-binomial, message=FALSE, warning=FALSE}
-library(dplyr)
-library(knitr)
 
 # Define binomial response: successes = registered; failures = casual
 train$reg_count   <- train$registered
@@ -479,33 +475,33 @@ cat("Binomial GLM accuracy:", round(glm_binom_accuracy, 3), "\n")
 kable(
   glm_binomial_coefs,
   digits  = 3,
-  caption = "Binomial GLM – Probability that a rider is registered (Mayra)"
+  caption = "Binomial GLM – Probability that a rider is registered"
 )
 ```
 
 ### Interpretation
 
-The binomial GLM models how calendar and weather conditions change the **likelihood that a ride comes from a registered user**.
+**Baseline Prediction**: Under winter, midnight, non-holiday, non-working-day, clear-weather conditions, the model predicts a **registered-user share of ~87%** (exp(1.942)).
 
-- **Workingday**: Strong positive effect → registered users dominate on working days, matching commuter-driven demand.
-- **Hour of day**: Commute hours (7–9am, 4–6pm) increase registered-user share; midday hours attract more casual riders.
-- **Weather**: Bad weather increases the proportion of registered riders (casual riders drop off more).
-- **Temperature**: Warmer hours slightly reduce the registered share → warm weather attracts more leisure/casual users.
-- **Season**: Winter shows higher registered-user share; summer shows more casual-user activity.
+**Key Demand Drivers**:
 
-Overall, the model achieves **high accuracy** at classifying whether an hour is dominated by registered vs casual users.
+- **Workingday**: Registered riders increase by **exp(0.911) ≈ 2.49×**, confirming strong commuter dominance.  
+- **Hour of day**: Morning peaks (5–8am) expand registered share (**exp(0.64–0.93) ≈ 1.9–2.5×**).  
+  Midday (10–15h) reduces registered share by **exp(–0.47 to –0.65) ≈ 40–48%**.  
+- **Season**: Spring/Summer reduce registered usage by **exp(–0.303 to –0.092) ≈ 9–26%**, reflecting higher casual/tourist activity.  
+- **Weather**: Light rain/snow increases registered share by **exp(0.171) ≈ 1.19×** as casual users drop off more quickly.  
+- **Temperature**: Warmer conditions reduce registered demand by **exp(–1.513) ≈ 0.22×**, a strong **78% shift** toward casual riders.
+
+Overall, the model achieves **high accuracy**, capturing clear commuter vs. leisure behavior patterns across time, weather, and seasonality.
 
 ### Business Value
 
-This model identifies **WHO uses the service under different conditions**:
+This model identifies **who uses the service under which conditions**, enabling targeted operational and marketing actions:
 
-- **Commuter core**: Registered users dominate working days and commute hours → commercial/corporate subscription opportunities.
-- **Tourist/leisure windows**: Midday, warm, dry conditions attract casual riders → ideal for short-term promotions and onboarding campaigns.
-- **Operational planning**: Redistribute bikes differently based on rider type dominance.
-- **Marketing alignment**: Tailor messaging to “commuters vs leisure riders” depending on season/hour/weather.
-
-This model supports membership strategy, pricing, and targeted campaigns.
-
+- **Commuter segments**: Morning and working-day peaks support corporate plans, commuter passes, and weekday-focused resource allocation.  
+- **Tourist/leisure segments**: Warm midday hours are dominated by casual riders → ideal for tourist promotions, flexible passes, and leisure-focused campaigns.  
+- **Weather-aware planning**: Rain increases registered share; warm sunny days increase casual demand → adjust supply accordingly.  
+- **Operational optimization**: Redistribute bikes based on dominant rider type—commuter routes in the morning, leisure/tourist zones in warm afternoons.
 
 ##
 
@@ -516,9 +512,7 @@ This model allows **flexible smooth functions** for temperature, perceived tempe
 GAMs are ideal when relationships are curved or seasonal patterns vary gradually.
 
 ```{r gam-model, message=FALSE, warning=FALSE}
-library(mgcv)
-library(dplyr)
-library(knitr)
+
 
 # Load or fit the GAM model
 if (file.exists("../models/gam_model.rds")) {
@@ -554,26 +548,45 @@ kable(
 
 ### Interpretation
 
-The GAM reveals **nonlinear patterns** in demand:
+**Baseline Prediction**: In winter, during January, at midnight on a non-working, non-holiday with clear weather, the GAM predicts an average demand of **exp(3.813) ≈ 45 bikes per hour**.
 
-- **Temperature (smooth)**: Demand increases sharply from cold to mild temperatures, then plateaus at high temperatures.
-- **Perceived temperature (atemp)**: Similar nonlinear rise, confirming strong comfort-weather effects.
-- **Humidity**: Moderate humidity supports demand; extremely high humidity reduces casual-bike usage.
-- **Windspeed**: Light wind has minimal effect; stronger wind reduces demand nonlinearly.
-- **Hour**: Smooth cyclical pattern with two clear peaks (commute times).
+**Key Demand Drivers**:
 
-GAM’s flexibility shows that demand doesn’t react linearly: passengers respond strongly to *transitions* in weather (e.g., cold-to-mild jump).
+- **Season**: Compared to winter, demand increases by  
+  **exp(0.260) ≈ 1.30× in spring**, **exp(0.313) ≈ 1.37× in summer**, and  
+  **exp(0.473) ≈ 1.60× in fall**, confirming overall higher usage in warmer seasons.
+
+- **Hour of day**:  
+  Demand is very low in the early night (e.g. hour 3: β = –1.443).  
+  From the morning commute onwards it rises sharply, with peaks around  
+  **hour 8 (β = 1.933 → exp ≈ 6.9×)** and **hour 17 (β = 1.974 → exp ≈ 7.2×)**  
+  relative to midnight, capturing strong rush-hour patterns.
+
+- **Holiday & Workingday**:  
+  Holidays slightly reduce demand (**β = –0.122 → exp ≈ 0.89×**),  
+  while working days have a small positive effect (**β = 0.019 → exp ≈ 1.02×**).
+
+- **Weather (parametric)**:  
+  Mist/Cloudy conditions have a small negative effect (**β = –0.025 → exp ≈ 0.98×**).  
+  Light rain or snow reduces expected demand by about **30%**  
+  (**β = –0.351 → exp ≈ 0.70×**), while severe storms have only a minor additional effect.
+
+- **Smooth weather effects** (nonlinear terms):  
+  All smooth terms are highly significant (p < 0.001), showing strong nonlinear relationships:  
+  - *s(temp)* and *s(atemp)*: Demand rises steeply from cold to mild conditions and then flattens or slightly declines at very high temperatures.  
+  - *s(humidity)*: Moderate humidity supports demand, while very high humidity strongly reduces it.  
+  - *s(windspeed)*: Light wind has little impact, but higher wind speeds reduce demand in a nonlinear way.
+
+Overall, the GAM captures both **sharp hourly peaks** and **smooth nonlinear weather effects**, improving the fit compared to purely linear models.
 
 ### Business Value
 
-The GAM uncovers subtle patterns useful for forecasting and operations:
+The GAM provides a detailed picture of **how many bikes are needed under specific weather and time conditions**:
 
-- **Weather-sensitive planning**: Shows exactly when weather transitions cause demand spikes or drops.
-- **Hourly redistribution optimization**: Identifies peak and shoulder hours with nonlinear accuracy.
-- **Season-aware marketing**: Marketing teams can use temperature-dependent demand curves to time leisure promotions.
-- **Infrastructure decisions**: Helps allocate bikes during heatwaves, heavy humidity, or strong winds.
-
-This model adds predictive power and enhances decisions involving **weather**, **seasonality**, and **hour-of-day** dynamics.
+- **Weather-sensitive planning**: Operators can anticipate demand spikes when temperatures move from cold to mild and prepare for drops during heavy rain, high humidity, or strong winds.  
+- **Rush-hour capacity management**: Clear peak factors (up to ~7× midnight demand) support precise staffing and bike rebalancing during morning and evening commutes.  
+- **Seasonal and promotional timing**: Higher demand in spring, summer, and fall, combined with temperature–humidity curves, helps schedule **leisure-focused campaigns and discounts** when riders are most responsive.  
+- **Resilient operations**: By modelling nonlinear responses, the GAM enables more robust forecasting for unusual weather days, reducing both shortages and excess idle bikes.
 
 
 ##
