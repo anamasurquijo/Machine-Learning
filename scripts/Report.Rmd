@@ -1,10 +1,10 @@
 ---
-title: "Predictive Analytics for Bike Sharing Demand Optimization"
-subtitle: "A Comprehensive Machine Learning Analysis for Operational Excellence"
+title: "Demand Forecasting and Operational Optimization for Capital Bikeshare in Washington, DC"
+subtitle: "A Predictive Modeling Feasibility Study to Improve Availability, Efficiency & Rider Experience"
 authors: "Ana Mas Urquijo, Mayra Corrales, Vani Gupta"
 date: "`r Sys.Date()`"
 output: 
-  pdf_document:
+  html_document:
     toc: true
     toc_depth: 3
     number_sections: true
@@ -47,17 +47,60 @@ set.seed(81)
 
 # Executive Summary
 
-This analysis provides actionable insights for optimizing bike-sharing operations through predictive modeling. Using hourly rental data spanning two years, we developed six complementary machine learning models to forecast demand patterns, enabling strategic decisions about bike distribution, staffing, and resource allocation. Our models predict total demand, identify high-traffic periods, and distinguish usage patterns between casual and registered users, directly supporting operational efficiency and customer satisfaction goals.
+This report applies predictive analytics to support Capital Bikeshare in
+improving fleet availability and operational performance across
+Washington, D.C. Using hourly rental data from 2011 and 2012, we
+developed six machine learning models to forecast system demand,
+identify peak usage periods, and distinguish behavior between casual and
+registered riders. These insights enable smarter decisions for bike
+distribution, staffing, and resource allocation—reducing station
+imbalances, improving service reliability, and enhancing the rider
+experience. The results demonstrate the value of predictive demand
+modeling in supporting proactive operational planning and future service
+improvements.
 
 # Introduction and Business Context
 
-## Client Needs
+## Client Context & Needs
 
-As a bike-sharing company, operational excellence depends on anticipating demand fluctuations. Mis-allocating resources leads to customer dissatisfaction (bike shortages) or wasted capacity (excess bikes). This analysis addresses three critical business questions:
+For Capital Bikeshare, service reliability depends on ensuring bikes and
+docks are available where and when riders need them. Usage varies
+significantly across time of day, season, weather, and rider type,
+leading to operational challenges such as empty or full stations during
+peak periods and excess inventory in low-demand areas. These imbalances
+increase redistribution costs and can negatively impact the rider
+experience.
+
+To support more proactive decision-making, this analysis focuses on
+three core operational questions:
 
 1. **How many bikes will be needed?** (Total demand forecasting)
 2. **When will demand peak?** (High-demand period identification)
 3. **Who are our users?** (Casual vs. registered user patterns)
+
+Accurate forecasting enables Capital Bikeshare to optimize fleet
+allocation, staffing, and maintenance scheduling, helping to reduce
+shortages and improve overall service reliability.
+
+Customer feedback from Capital Bikeshare’s member surveys further
+reinforces the importance of addressing these needs. For example, 47% of
+respondents in the 2012 Member Survey requested more docks at existing
+high-demand stations—highlighting bike and dock availability as a
+primary driver of customer satisfaction and expansion priorities.
+
+Additionally, Bikeshare plays a key role in Washington, D.C.’s
+multimodal transportation network, with more than half of riders using
+the service to connect to Metrorail or bus stations, according to survey
+findings.
+
+Enhancing reliability through predictive demand modeling can strengthen
+these transportation links and support broader mobility goals for the
+District.
+
+As system usage continues to grow, data-driven forecasting tools can
+guide both operational planning and future network expansion, ensuring
+that Capital Bikeshare remains a dependable and competitive
+transportation option for both commuters and recreational riders.
 
 ## Analytical Approach
 
