@@ -244,24 +244,68 @@ grid.arrange(p1, p2, ncol = 2)
 
 ```{r weather-plots}
 p3 <- ggplot(bike, aes(x = temp, y = count)) +
-  geom_point(alpha = 0.2, color = "coral") +
+  geom_point(alpha = 0.15, color = "coral", size = 1) +
   geom_smooth(method = "loess", se = TRUE, color = "darkred", linewidth = 1.2) +
   labs(title = "Temperature vs. Demand", 
        x = "Normalized Temperature", y = "Total Rentals") +
   theme_minimal()
 
 p4 <- ggplot(bike, aes(x = weather, y = count, fill = weather)) +
-  geom_boxplot(alpha = 0.7) +
-  scale_fill_brewer(palette = "Set2") +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  scale_fill_brewer(palette = "Set1") +
   labs(title = "Weather Condition Impact", 
        x = "Weather Situation", y = "Total Rentals") +
   theme_minimal() +
   theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
 
-grid.arrange(p3, p4, ncol = 2)
+p5 <- ggplot(bike, aes(x = humidity, y = count)) +
+  geom_point(alpha = 0.15, color = "steelblue", size = 1) +
+  geom_smooth(method = "loess", se = TRUE, color = "darkblue", linewidth = 1.2) +
+  labs(title = "Humidity vs. Demand", 
+       x = "Normalized Humidity", y = "Total Rentals") +
+  theme_minimal()
+
+p6 <- ggplot(bike, aes(x = windspeed, y = count)) +
+  geom_point(alpha = 0.15, color = "darkgreen", size = 1) +
+  geom_smooth(method = "loess", se = TRUE, color = "forestgreen", linewidth = 1.2) +
+  labs(title = "Windspeed vs. Demand", 
+       x = "Normalized Windspeed", y = "Total Rentals") +
+  theme_minimal()
+
+grid.arrange(p3, p4, p5, p6, ncol = 2)
 ```
 
-**Key Insights**: Strong positive relationship between temperature and demand up to 0.7 normalized temperature, with high variance indicating hour-of-day effects dominate at moderate temperatures. Clear weather yields median ~150 rentals versus ~100 in light rain/snow, representing 33% demand reduction that justifies dynamic pricing and proactive bike re-positioning during poor weather forecasts.
+**Key Insights**: Temperature shows strong positive relationship up to 0.7 normalized temperature with peak demand plateauing around 400-600 rentals. Clear weather (median ~280 rentals) outperforms cloudy conditions (~200 rentals) and dramatically exceeds light rain/snow (~100 rentals), representing 65% demand reduction in poor weather. 
+Humidity shows a slight inverted-U pattern with peak demand around 0.3-0.4 humidity, declining at both extreme dryness and high moisture levels. Wind speed exhibits flat relationship with slight negative trend, indicating wind is not a primary demand driver; most demand variability occurs within the calm 0.0-0.3 wind speed range, suggesting temperature and precipitation dominate weather-based decisions.
+
+
+## Holiday and Working Day Patterns
+
+```{r holiday-patterns}
+# Reshape data for comparison
+bike_long <- bike %>%
+  select(holiday, workingday, casual, registered) %>%
+  pivot_longer(cols = c(casual, registered), 
+               names_to = "user_type", 
+               values_to = "count")
+
+p7 <- ggplot(bike_long, aes(x = holiday, y = count, fill = user_type)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  labs(title = "User Type Distribution by Holiday Status", 
+       x = "Holiday", y = "Rental Count") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+p8 <- ggplot(bike_long, aes(x = workingday, y = count, fill = user_type)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  labs(title = "User Type Distribution by Working Day Status", 
+       x = "Working Day", y = "Rental Count") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p7, p8, ncol = 2)
+```
+**Key Insights**: Casual users show modest holiday boost (median ~40 on holidays vs. ~30 on non-holidays) but remain consistently lower than registered users across all conditions. Registered users dominate demand regardless of holiday status (median ~130-150) and show remarkable stability. Working days reveal the core pattern: registered users achieve highest median (~150) on working days with tight distribution, while casual users peak on non-working days (median ~50 vs. ~25 on working days, 2× increase). This inverse relationship confirms two distinct rider segments—registered commuters who drive weekday demand, and casual leisure riders who prefer weekends/non-working days for recreational cycling.
 
 
 \newpage
