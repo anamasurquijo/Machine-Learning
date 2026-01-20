@@ -1,0 +1,6 @@
+@media print {
+  pre, code {
+    page-break-inside: auto !important;
+    white-space: pre-wrap !important;
+  }
+}
