@@ -5,6 +5,8 @@ authors: "Ana Mas Urquijo, Mayra Corrales, Vani Gupta"
 date: "`r Sys.Date()`"
 output: 
   html_document:
+    css: estilo.css
+    code_folding: hide
     toc: true
     toc_depth: 3
     number_sections: true
@@ -18,109 +20,72 @@ knitr::opts_chunk$set(
   fig.width = 10,           ## Wider for side-by-side plots
   fig.height = 5,
   cache = FALSE,            ## Don't cache by default (safer)
-  fig.align = 'center'
+  fig.align = 'center',
+  comment = ""             ## Removes # from output
 )
 
 ## Load required libraries
-library(tidyverse)
+library(tidyverse) # data manipulation and visualization
+library(e1071) #SVM
+library(caret) #SVM, cross validation
 library(lubridate)
 library(mgcv)
 library(nnet)
-library(e1071)
-library(caret)
 library(gridExtra)
 library(knitr)
 library(corrplot)
 library(reshape2)
-library(caret)
 library(dplyr)
 library(tibble)
 library(mgcv)
+library(knitr)
+library(kableExtra)
 
-
-
-## Set seed for reproducibility
+## Set seed for reproducibility/ randomness for dividing train and test in cross validation
 set.seed(81)
 ```
 
-\newpage
-
 # Executive Summary
 
-This report applies predictive analytics to support Capital Bikeshare in
-improving fleet availability and operational performance across
-Washington, D.C. Using hourly rental data from 2011 and 2012, we
-developed six machine learning models to forecast system demand,
-identify peak usage periods, and distinguish behavior between casual and
-registered riders. These insights enable smarter decisions for bike
-distribution, staffing, and resource allocation—reducing station
-imbalances, improving service reliability, and enhancing the rider
-experience. The results demonstrate the value of predictive demand
-modeling in supporting proactive operational planning and future service
-improvements.
+This report applies predictive analytics to support Capital Bikeshare in improving fleet availability and operational performance across Washington, D.C. Using hourly rental data from 2011 and 2012, we developed six machine learning models to forecast system demand, identify peak usage periods, and distinguish behavior between casual and registered riders. These insights enable smarter decisions for bike distribution, staffing, and resource allocation—reducing station imbalances, improving service reliability, and enhancing the rider experience. The results demonstrate the value of predictive demand modeling in supporting proactive operational planning and future service improvements.
 
 # Introduction and Business Context
 
-## Client Context & Needs
+For Capital Bikeshare, service reliability depends on ensuring bikes and docks are available where and when riders need them. Usage varies significantly across time of day, season, weather, and rider type, leading to operational challenges such as empty or full stations during peak periods and excess inventory in low-demand areas. These imbalances increase redistribution costs and can negatively impact the rider experience.
 
-For Capital Bikeshare, service reliability depends on ensuring bikes and
-docks are available where and when riders need them. Usage varies
-significantly across time of day, season, weather, and rider type,
-leading to operational challenges such as empty or full stations during
-peak periods and excess inventory in low-demand areas. These imbalances
-increase redistribution costs and can negatively impact the rider
-experience.
+To support more proactive decision-making, this analysis focuses on three core operational questions:
 
-To support more proactive decision-making, this analysis focuses on
-three core operational questions:
+1.  **How many bikes will be needed?** (Total demand forecasting)
+2.  **When will demand peak?** (High-demand period identification)
+3.  **Who are our users?** (Casual vs. registered user patterns)
 
-1. **How many bikes will be needed?** (Total demand forecasting)
-2. **When will demand peak?** (High-demand period identification)
-3. **Who are our users?** (Casual vs. registered user patterns)
+Accurate forecasting enables Capital Bikeshare to optimize fleet allocation, staffing, and maintenance scheduling, helping to reduce shortages and improve overall service reliability.
 
-Accurate forecasting enables Capital Bikeshare to optimize fleet
-allocation, staffing, and maintenance scheduling, helping to reduce
-shortages and improve overall service reliability.
+Customer feedback from Capital Bikeshare’s member surveys further reinforces the importance of addressing these needs. For example, 47% of respondents in the 2012 Member Survey requested more docks at existing high-demand stations — highlighting bike and dock availability as a primary driver of customer satisfaction and expansion priorities.
 
-Customer feedback from Capital Bikeshare’s member surveys further
-reinforces the importance of addressing these needs. For example, 47% of
-respondents in the 2012 Member Survey requested more docks at existing
-high-demand stations—highlighting bike and dock availability as a
-primary driver of customer satisfaction and expansion priorities.
+Additionally, Bikeshare plays a key role in Washington, D.C.’s multimodal transportation network, with more than half of riders using the service to connect to Metrorail or bus stations, according to survey findings.
 
-Additionally, Bikeshare plays a key role in Washington, D.C.’s
-multimodal transportation network, with more than half of riders using
-the service to connect to Metrorail or bus stations, according to survey
-findings.
+Enhancing reliability through predictive demand modeling can strengthen these transportation links and support broader mobility goals for the District.
 
-Enhancing reliability through predictive demand modeling can strengthen
-these transportation links and support broader mobility goals for the
-District.
-
-As system usage continues to grow, data-driven forecasting tools can
-guide both operational planning and future network expansion, ensuring
-that Capital Bikeshare remains a dependable and competitive
-transportation option for both commuters and recreational riders.
-
-## Analytical Approach
-
-We employ six complementary modeling techniques, each addressing specific business needs:
-
-- **Linear Models (LM)**: Baseline demand forecasting with interpretable coefficients
-- **Generalized Linear Models (GLM)**: Count-based modeling for casual users (Poisson) and user composition analysis (Binomial)
-- **Generalized Additive Models (GAM)**: Capturing complex nonlinear weather effects
-- **Neural Networks (NN)**: High-capacity learning for demand classification
-- **Support Vector Machines (SVM)**: Robust binary classification for peak demand
-
-\newpage
+As system usage continues to grow, data-driven forecasting tools can guide both operational planning and future network expansion, ensuring that Capital Bikeshare remains a dependable and competitive transportation option for both commuters and recreational riders.
 
 # Dataset Description
 
 ## Data Source
 
-The dataset originates from the UCI Machine Learning Repository's Capital Bikeshare system (Washington D.C.), containing hourly rental records from 2011-2012. This real-world data captures 17,379 hourly observations across diverse weather conditions, seasons, and usage patterns.
+The dataset used in this study originates from the Bike Sharing Dataset, developed by Hadi Fanaee-T at the Laboratory of Artificial Intelligence and Decision Support (LIAAD), University of Porto. The data contains hourly bicycle rental records from the Capital Bikeshare system in Washington D.C., covering the years 2011–2012. It comprises 17,379 hourly observations, each annotated with environmental, seasonal, and temporal features relevant to rental behavior.
 
-**Source**: https://www.kaggle.com/datasets/lakshmi25npathi/bike-sharing-dataset
+The dataset was constructed by aggregating publicly available system logs from the Capital Bikeshare network and enriching them with external meteorological data sourced from Fremeteo, along with additional seasonal descriptors. This provides a real-world foundation for understanding how factors such as temperature, precipitation, time of day, seasonality, and holidays influence demand patterns in urban bike-sharing systems.
+
+The dataset is publicly accessible through the UCI Machine Learning Repository and is commonly redistributed on Kaggle, where it was accessed for the purposes of this analysis.
+
+**References**
+
+Fanaee-T, H. (2013).**Bike Sharing Dataset.** Laboratory of Artificial Intelligence and Decision Support (LIAAD), INESC TEC, University of Porto. Retrieved from Kaggle: <https://www.kaggle.com/datasets/lakshmi25npathi/bike-sharing-dataset>
+
+Capital Bikeshare. (2012).**System Data and Usage Logs.**Washington D.C., USA. Retrieved from <https://capitalbikeshare.com/system-data>
+
+Fremeteo. (n.d.).**Historical Weather Data.** Retrieved from <http://www.freemeteo.com>
 
 ## Variables Overview
 
@@ -130,16 +95,15 @@ bike <- read.csv("../data/raw/hour.csv")
 
 # Display structure
 str(bike)
-# colSums(is.na(bike)) ## No NAs returned
 ```
 
-The dataset includes:
+As we have seen, the dataset includes the following information, which can be grouped into:
 
-- **Temporal features**: Date, hour, season, month, year, weekday, holiday, working day
-- **Weather conditions**: Temperature, humidity, wind speed, weather situation
-- **Response variables**: Total rentals, casual users, registered users
+-   **Temporal features**: date, hour, season, month, year, weekday, holiday, working day
+-   **Weather conditions**: temperature, humidity, wind speed, weather situation
+-   **Response variables**: total rentals, casual users, registered users
 
-All continuous weather variables are normalized (0-1 scale). There are no NAs in the dataset. 
+All continuous weather variables are already provided in normalized form on a common 0–1 scale, and the dataset contains no missing values.
 
 ## Variable Transformations
 
@@ -191,9 +155,11 @@ write.csv(bike, "../data/processed/bike_cleaned.csv", row.names = FALSE)
 saveRDS(bike, "../data/processed/bike_cleaned.rds")
 ```
 
+Despite this initial level of preparation, additional transformations were applied to improve interpretability and support modeling, including recoding categorical variables, removing redundant identifiers, and deriving additional response variables for different analytical tasks. First, non-informative identifiers (instant and dteday) were removed, and variables were renamed for clarity and readability. Coded temporal and weather variables were then converted into labeled factors to ensure they are treated as categorical features rather than numeric quantities. Finally, additional response variables were created to support different modeling tasks, including a log-transformed demand measure, a binary high-demand indicator, and the share of registered users. These steps improve interpretability and analytical flexibility without modifying the underlying data.
+
 ## Summary Statistics
 
-Understanding the distinction between casual and registered users is crucial for targeted strategies.
+Furthermore, understanding the distinction between casual and registered users is crucial for targeted strategies.
 
 ```{r user-type-summary, cache = TRUE}
 # Comparative statistics for user types
@@ -208,12 +174,11 @@ bike %>%
   )
 ```
 
-**Key Insight:**
-On average, registered users account for roughly 81% of total rentals, while casual users contribute about 19%indicating that most rides are taken by regular subscribers rather than one-time or occasional users. The difference between mean and median values across all user types also highlights a right-skewed distribution, meaning that while most hours experience relatively low to moderate rental activity, there are a few peak periods with exceptionally high demand that raise the overall average. This skewness is further supported by the large standard deviations, reflecting significant fluctuations in hourly rentals.
-
-\newpage
+**Key Insight:** On average, registered users account for roughly 81% of total rentals, while casual users contribute about 19%, indicating that most rides are taken by regular subscribers rather than one-time or occasional users. The difference between mean and median values across all user types also highlights a right-skewed distribution, meaning that while most hours experience relatively low to moderate rental activity, there are a few peak periods with exceptionally high demand that raise the overall average. This skewness is further supported by the large standard deviations, reflecting significant fluctuations in hourly rentals.
 
 # Exploratory Data Analysis
+
+This section explores historical demand patterns to understand when bikes are most needed, how weather affects usage, and how rider behavior differs across conditions. These insights help frame operational challenges and guide the demand forecasting models used to support day-to-day and strategic decision-making.
 
 ## Temporal Patterns
 
@@ -237,8 +202,7 @@ p2 <- ggplot(bike, aes(x = season, y = count, fill = season)) +
 grid.arrange(p1, p2, ncol = 2)
 ```
 
-**Key Insights**: Clear bimodal pattern with peaks at 8am and 5pm indicates commuter-driven demand, while overnight hours (0-5am) show minimal activity. Summer and Fall exhibit highest median demand (~180 rentals), while Winter shows lowest (~100 rentals), suggesting weather-dependent cycling behavior and need for seasonal fleet adjustments.
-
+**Key Insights**: Clear bimodal pattern with peaks at 8am and 5pm indicates commuter-driven demand, while overnight hours (0-5am) show minimal activity. Summer and Fall exhibit highest median demand (~180 rentals), while Winter shows lowest (\~100 rentals), suggesting weather-dependent cycling behavior and need for seasonal fleet adjustments.
 
 ## Weather Effects
 
@@ -275,9 +239,7 @@ p6 <- ggplot(bike, aes(x = windspeed, y = count)) +
 grid.arrange(p3, p4, p5, p6, ncol = 2)
 ```
 
-**Key Insights**: Temperature shows strong positive relationship up to 0.7 normalized temperature with peak demand plateauing around 400-600 rentals. Clear weather (median ~280 rentals) outperforms cloudy conditions (~200 rentals) and dramatically exceeds light rain/snow (~100 rentals), representing 65% demand reduction in poor weather. 
-Humidity shows a slight inverted-U pattern with peak demand around 0.3-0.4 humidity, declining at both extreme dryness and high moisture levels. Wind speed exhibits flat relationship with slight negative trend, indicating wind is not a primary demand driver; most demand variability occurs within the calm 0.0-0.3 wind speed range, suggesting temperature and precipitation dominate weather-based decisions.
-
+**Key Insights**: Temperature shows strong positive relationship up to 0.7 normalized temperature with peak demand plateauing around 400-600 rentals. Clear weather (median ~280 rentals) outperforms cloudy conditions (~200 rentals) and dramatically exceeds light rain/snow (~100 rentals), representing 65% demand reduction in poor weather. Humidity shows a slight inverted-U pattern with peak demand around 0.3-0.4 humidity, declining at both extreme dryness and high moisture levels. Wind speed exhibits flat relationship with slight negative trend, indicating wind is not a primary demand driver; most demand variability occurs within the calm 0.0-0.3 wind speed range, suggesting temperature and precipitation dominate weather-based decisions.
 
 ## Holiday and Working Day Patterns
 
@@ -305,14 +267,12 @@ p8 <- ggplot(bike_long, aes(x = workingday, y = count, fill = user_type)) +
 
 grid.arrange(p7, p8, ncol = 2)
 ```
-**Key Insights**: Casual users show modest holiday boost (median ~40 on holidays vs. ~30 on non-holidays) but remain consistently lower than registered users across all conditions. Registered users dominate demand regardless of holiday status (median ~130-150) and show remarkable stability. Working days reveal the core pattern: registered users achieve highest median (~150) on working days with tight distribution, while casual users peak on non-working days (median ~50 vs. ~25 on working days, 2× increase). This inverse relationship confirms two distinct rider segments—registered commuters who drive weekday demand, and casual leisure riders who prefer weekends/non-working days for recreational cycling.
 
+**Key Insights**: Casual users show modest holiday boost (median ~40 on holidays vs. ~30 on non-holidays) but remain consistently lower than registered users across all conditions. Registered users dominate demand regardless of holiday status (median ~130-150) and show remarkable stability. Working days reveal the core pattern: registered users achieve highest median (~150) on working days with tight distribution, while casual users peak on non-working days (median ~50 vs. ~25 on working days, 2× increase). This inverse relationship confirms two distinct rider segments — registered commuters who drive weekday demand, and casual leisure riders who prefer weekends/non-working days for recreational cycling.
 
-\newpage
+# Correlation Analysis
 
-# Feature Selection and Correlation Analysis
-
-Before building predictive models, we examine correlations between predictors and the response variable (`count`) to detect multicollinearity and guide feature selection.
+Before building predictive models, we examine correlations between candidate predictors and the response variable (count) to develop more initial hypotheses, and analyze correlations among predictors to assess multicollinearity and guide feature selection.
 
 ```{r correlation-analysis, fig.height=7, fig.width=10, message=FALSE, warning=FALSE}
 
@@ -331,16 +291,16 @@ bike_numeric <- bike %>%
   select(
     season_num, year_num, month_num, hour_num,
     holiday_num, weekday_num, workingday_num, weather_num,
-    temp, atemp, humidity, windspeed,
-    casual, registered, count
+    temp, atemp, humidity, windspeed, count
   )
 
 # Calculate correlation matrix
 cor_matrix <- cor(bike_numeric, use = "complete.obs")
+cor_predictors <- cor(bike_numeric %>% select(-count), use = "complete.obs")
 
 # Visualize correlation matrix
 corrplot(
-  cor_matrix,
+  cor_predictors,
   method       = "color",
   type         = "upper",
   tl.col       = "black",
@@ -349,13 +309,11 @@ corrplot(
   addCoef.col  = "black",
   number.cex   = 0.6,
   col          = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200),
-  title        = "Correlation Matrix: Predictors and Response Variable (count)",
+  title        = "Correlation Matrix of Bike Demand Predictors",
   mar          = c(0, 0, 2, 0)
 )
 
 ```
-
-## Correlation Insights for Model Building
 
 ```{r correlation-insights, message=FALSE, warning=FALSE}
 
@@ -368,44 +326,44 @@ cor_with_count <- tibble(
   arrange(desc(abs(Correlation)))
 
 kable(
-  head(cor_with_count, 10),
+  head(cor_with_count, 20),
   digits  = 3,
-  caption = "Top 10 Correlations with Total Demand (count)"
+  caption = "Correlations with Total Bike Demand"
 )
 
 ```
 
-**Key Findings for Feature Selection**
+## Correlations with Total Bike Demand
 
-1. **Strong and important predictors**  
-   - **Temperature (`temp`, ~0.40)** and **feeling temperature (`atemp`, ~0.40)** show moderate positive correlations.  
-   - **Registered users (~0.97)** strongly correlate with total demand (mathematically expected).  
-   - **Hour (~0.40)** is the most important temporal factor.
+The exploratory data analysis conducted so far has already revealed several consistent patterns in bike usage. Building on these observations, a correlation analysis provides additional quantitative guidance on which factors are most closely related to total bike demand. The values below indicate direction and relative strength, and are used to inform the modeling stage rather than to draw final conclusions.
 
-2. **Multicollinearity concerns**  
-   - `temp` vs `atemp`: correlation ≈ 0.99 → **keep only `temp`**.  
-   - `holiday` vs `workingday`: negative correlation but captures different calendar effects → **keep both**.
+1.  **Temperature and feeling tempeature (~0.40)**: Warmer and more comfortable conditions tend to be associated with higher bike usage, reinforcing patterns observed during the exploratory analysis.
+2.  **Time of day (0.39)**: Demand varies strongly throughout the day, reflecting clear daily routines and commuting behavior identified in earlier analyses.
+3.  **Humidity (–0.32)**: More humid conditions are linked to lower bike usage, suggesting that rider comfort plays a role in discouraging trips.
+4.  **Year (0.25)**: Demand shows an upward trend over time, consistent with overall system growth and increasing adoption.
+5.  **Seasonality (0.18)**: Seasonal differences are present but appear less influential than immediate weather conditions.
+6.  **Weather conditions (–0.14)**: Poor weather slightly reduces demand, though its overall impact remains limited.
+7.  **Month, windspeed, holidays, working day, weekday (≤ 0.12)**: These factors show weak standalone relationships with demand once daily routines and weather comfort are taken into account.
 
-3. **Weak but relevant predictors**  
-   - Humidity: weak negative correlation but meteorologically meaningful.  
-   - Windspeed: minimal linear effect; may contribute in nonlinear models (GAM, trees).
+Together with the exploratory findings, these correlation-based signals guide the selection of variables and motivate the use of multiple predictive models to quantify their relative importance and support operational decision-making.
 
-4. **Feature selection strategy**  
-   - **Drop**: `atemp`, `instant`, `dteday`.  
-   - **Keep**: all other calendar & weather variables.  
-   - **Explore interactions**:  
-     - `temp:season` (temperature effects differ by season)  
-     - `hour:workingday` (commuter vs leisure patterns)
+## Multicollinearity Assessment among Predictors
 
-\newpage
+Some predictors capture very similar information. When such overlap exists (referred to as multicollinearity), models can become harder to interpret and less stable, even if predictions remain accurate. To avoid this, we reviewed relationships among predictors and simplified the feature set by retaining the most meaningful and interpretable variables.
 
+- **Temperature vs. Feeling temperature**: (`temp` vs. `atemp`, r ≈ 0.99) These variables move almost identically and represent the same underlying weather conditions, so we will just keep temp.
+- **Month vs. Season**: (`month_num` vs. `season_num`, r ≈ 0.83) Both variables describe seasonal patterns and therefore provide overlapping information. We will therefore retain season, which offers a clearer and more intuitive representation.
+- **Holiday vs. Working day** (`holiday_num` vs. `workingday_num`, r ≈ –0.25) These variables capture similar information, especially if we having also the weekday as a predictor. We will therefore retain holiday.
 
+By removing overlapping predictors, we ensure the models remain robust, interpretable, and focused on variables that provide distinct insight into bike demand.
 
 # Model Development
 
 ## Train-Test Split Strategy
 
-To evaluate model performance objectively, we split the data into training (80%) and testing (20%) sets. The training set is used to fit models, while the testing set provides an unbiased assessment of how well models generalize to new data.
+To evaluate model performance objectively, we split the data into training (80%) and testing (20%) sets. The training set is used to fit models, while the testing set provides an unbiased assessment of how well models generalize to new data. This prevents overfitting, ensures fair comparison across models, and better reflects real operational conditions. The split is stratified so both sets preserve the same balance of high and low demand.
+
+From a business perspective, this matters because a model that performs well in training but poorly on unseen data would be unreliable for planning bike availability, rebalancing, or staffing. The test set helps ensure we deploy models that work in practice, not just on paper.
 
 ```{r train-test-split, cache=TRUE, dependson="data-prep"}
 # Create stratified split for high_demand to ensure balanced classes
@@ -413,92 +371,128 @@ train_idx <- createDataPartition(bike$high_demand, p = 0.8, list = FALSE)
 train <- bike[train_idx, ]
 test <- bike[-train_idx, ]
 
-cat("Training observations:", nrow(train), "\n")
-cat("Testing observations:", nrow(test), "\n")
-cat("\nClass distribution in training set:\n")
-table(train$high_demand) %>% prop.table() %>% print()
-cat("\nClass distribution in test set:\n")
-table(test$high_demand) %>% prop.table() %>% print()
+cat(
+  "Training observations: ", nrow(train), "\n",
+  "Testing observations: ", nrow(test), "\n\n",
+  "Class distribution in training and test sets:\n",
+  paste(capture.output(prop.table(table(train$high_demand))), collapse = "\n"),
+  paste(capture.output(prop.table(table(test$high_demand))), collapse = "\n")
+)
 ```
-
-**Why we chose an 80/20:Train/Test Split? **:
-
-1. **Prevents Overfitting**: If we evaluate models on the same data used for training, complex models (like neural networks) will appear artificially perfect. The test set reveals true generalization performance.
-
-2. **Simulates Real-World Deployment**: In production, models predict on future, unseen data. The test set mimics this scenario, showing how models perform on "new" hours the system hasn't encountered.
-
-3. **Enables Fair Comparison**: By evaluating all models on identical test data, we ensure performance differences reflect model quality, not data variation.
-
-4. **Stratified Sampling**: We use `createDataPartition()` to maintain similar class distribution in both sets, preventing train-test distribution mismatch.
-
-**Business Relevance**: A model with 90% training accuracy but 60% test accuracy is unreliable for operational planning. The test set ensures we deploy models that actually work when bike demand forecasts matter most.
 
 ## Linear Model (LM) - Total Demand Forecasting
 
-```{r}
+As we begin our predictive analysis, we first introduce a Linear Model (LM) as a baseline. Similar to a straight-line trend used in business forecasting, it allows us to understand direct, proportional relationships between operational factors (weather, time, and calendar effects) and bike demand.
 
-```
+The key advantage for Capital Bikeshare is interpretability: the Linear Model provides transparent coefficients showing how many additional bikes are expected with an increase in any predictor variable. This clarity helps your team easily identify the underlying drivers of demand and make confident, data-supported decisions.
 
-**Interpretation**: 
+```{r,class.source = "fold-show"}
 
-**Business Value**: 
-
-## GLM Poisson - Casual User Modeling
-
-Casual users represent growth opportunities. We model their counts using Poisson regression to respect the discrete nature of this variable.
-
-### Model choice and dispersion
-The count model was estimated with a Poisson GLM and then re-estimated using a quasi-Poisson family to account for overdispersion. This method flagged certain coefficients that lost significance under quasi fit, specifically severe weather conditions. The quasi-Poisson dispersion parameter was estimated at φ ≈ 9.34, indicating substantially higher variance than a Poisson model assumes.
-
-```{r glm-poisson, cache=TRUE, dependson="train-test-split"}
 # Check if model already exists
-if (file.exists("../models/glm_poisson.rds")) {
-  glm_poisson <- readRDS("../models/glm_poisson.rds")
+if (file.exists("../models/lm_model.rds")) {
+  lm_model <- readRDS("../models/lm_model.rds")
 } else {
-  # Fit Poisson GLM for casual users
-  glm_poisson <- glm(casual ~ season + year + hour + holiday + weekday + 
+
+#Fit linear model
+lm_model <- lm(count ~ season + year + hour + holiday + weekday +
+                weather + temp + humidity + windspeed, 
+               data = train)
+  # Save model
+  saveRDS(lm_model, "../models/lm_model.rds")
+}
+
+#Key coefficients
+summary(lm_model)
+
+# Predictions
+lm_pred <- predict(lm_model, newdata = test)
+lm_rmse <- sqrt(mean((test$count - lm_pred)^2))
+lm_mae <- mean(abs(test$count - lm_pred))
+lm_r_squared <- cor(test$count, lm_pred)^2
+
+# Print results
+cat(
+  "Linear Model Performance:\n",
+  "RMSE: ", round(lm_rmse, 2), "\n",
+  "MAE:  ", round(lm_mae, 2), "\n",
+  "R²:   ", round(lm_r_squared, 2)
+)
+```
+### Interpretation
+
+Capital Bikeshare demand follows structured and predictable patterns. The Linear Model explains 68% of the variation in hourly ridership, and all key predictors show very small p-values, providing strong evidence that weather, time, and calendar effects meaningfully shape usage.
+
+**Weather and Seasonal Effects**: Temperature has a strong positive impact on ridership, confirming that warmer days increase usage. Humidity and windspeed act as suppressors, reducing ridership under uncomfortable or adverse conditions. Relative to the seasonal baseline (Winter), all other seasons lift demand, with Fall showing the strongest increase (+64 bikes/hour) and Spring (+44 bikes/hour) also providing a meaningful boost. Weather conditions are interpreted relative to the baseline category Clear/Partly Cloudy. These effects align with intuitive outdoor mobility behavior.
+**Time-of-Day Effects**: Demand follows a highly regular daily pattern with pronounced peaks at 08:00 and 17:00/18:00, driven by commuter flows. The evening peak represents the highest operational load, adding approximately +373 bikes/hour relative to the midnight baseline (24:00). These patterns are consistent across seasons and provide strong evidence for predictable rebalancing needs.
+**Calendar Effects**: Relative to the baseline categories (Sunday, Non-Holiday, 2011), weekdays exhibit higher usage, with Friday showing the strongest ridership, probably driven by the combination of commuting and leisure activity. Holidays and weekends show reduced ridership compared to typical workdays. System usage also increased year-over-year, with 2012 averaging +86 more bikes/hour than 2011, indicating a rising interest in cycling.
+**Forecasting errors**: The MAE of 77 bikes/hour reflects the typical deviation during normal conditions, while the RMSE of 102 bikes/hour captures larger errors during peak or unusual periods.
+
+### Business Value:
+
+**Seasonal and Weather-Based Fleet Management**: Winter and adverse-weather periods naturally depress ridership. These low-utilization windows are well suited for preventive maintenance, repairs, battery service, and refurbishment. Bringing part of the fleet indoors during cold, snowy, or stormy periods protects equipment from weather-related wear while reducing unnecessary outdoor inventory. This ensures more bikes return to peak season in reliable condition and lowers long-term maintenance costs.
+**Commuter Peak Optimization**: The strong morning and evening commuter peaks indicate that fleet availability during 08:00 and 17:00/18:00 is critical for service reliability. Ensuring that bikes are positioned at key origin stations before the peaks, and that docks are available at destination stations afterward, helps prevent both shortages and full-dock failures. Low-demand hours (late night and early afternoon) are ideal for rebalancing, servicing, and repositioning bikes for the next peak cycle.
+**Bike Buffers**: The linear model is a great guide, but it isn’t perfect. Therefore we recommend keeping a Backup Buffer of about 77 bikes during normal hours, and up to 102 bikes during rush hours.
+
+## Poisson Generalized Linear Model - Casual Riders Modeling
+
+Casual riders represent a meaningful growth segment for Capital Bikeshare, as their usage is driven by tourism and leisure rather than daily commuting. Because casual demand is recorded as hourly counts, we first considered a standard Poisson model. However, inspection of the dispersion parameter (φ ≈ 9.34) indicated that the variability in casual ridership was nearly ten times higher than a Poisson model would assume. This level of overdispersion would lead to overstated statistical significance and unreliable inference under a strict Poisson specification. We therefore estimated the model using a quasi-Poisson family, which adjusts for this excess variance and provides a more realistic representation of casual user behavior.
+
+```{r glm-poisson, cache=TRUE, dependson="train-test-split",class.source = "fold-show"}
+# Check if model already exists
+if (file.exists("../models/glm_quasipoisson.rds")) {
+  glm_quasipoisson <- readRDS("../models/glm_quasipoisson.rds")
+} else {
+  # Fit quasipoisson GLM for casual users
+  glm_quasipoisson <- glm(casual ~ season + year + hour + holiday + weekday + 
                        weather + temp + humidity + windspeed,
                      family = quasipoisson(link = "log"),
                      data = train)
   # Save model
-  saveRDS(glm_poisson, "../models/glm_poisson.rds")
+  saveRDS(glm_quasipoisson, "../models/glm_quasipoisson.rds")
 }
 
 # Key coefficients
-summary(glm_poisson)
+summary(glm_quasipoisson)
 
 # Predictions and performance
-glm_pois_pred <- predict(glm_poisson, newdata = test, type = "response")
-glm_pois_rmse <- sqrt(mean((test$casual - glm_pois_pred)^2))
-glm_pois_mae <- mean(abs(test$casual - glm_pois_pred))
-glm_pois_r_squared <- cor(test$casual, glm_pois_pred)^2
+glm_quasipois_pred <- predict(glm_quasipoisson, newdata = test, type = "response")
+glm_quasipois_rmse <- sqrt(mean((test$casual - glm_quasipois_pred)^2))
+glm_quasipois_mae <- mean(abs(test$casual - glm_quasipois_pred))
+glm_quasipois_r_squared <- cor(test$casual, glm_quasipois_pred)^2
 
-cat("\nPoisson GLM Performance:\n")
-cat("MAE:", round(glm_pois_mae, 2), "\n")
-cat("R²:", round(glm_pois_r_squared, 2), "\n")
+cat(
+  "Poisson GLM Performance:\n",
+  "MAE: ", round(glm_quasipois_mae, 2), "\n",
+  "R²:  ", round(glm_quasipois_r_squared, 2)
+)
+
 ```
+
 ### Interpretation
 
-**Baseline Prediction**: In Winter, on a Sunday at midnight (hour 0), with clear weather in 2011, the predicted casual demand is exp(1.327) ≈ 4 bikes.
+Because we are modeling counts of casual riders, the raw numbers from this model require a mathematical transformation to make sense. To save you time, we have already performed these transformations so that the insights provided below are directly applicable to your business decisions
+
+**Baseline Prediction**: Under baseline conditions (Winter, Sunday, midnight, clear weather, 2011), the model predicts about exp(1.327) ≈ 4 casual trips per hour.
 
 **Key Demand Drivers**:
 
-_Hour of day_: Midday hours (12-2pm) multiply demand by exp(1.72-1.78) ≈ 5.6-5.9× compared to midnight.
-_Temperature_: Going from cold (0.2) to warm (0.8) increases casual riders by exp(2.15×0.6) ≈ 3.5×.
-_Annual growth_: 2012 shows exp(0.37) ≈ 1.45× higher demand than 2011, indicating 45% year-over-year growth in casual users.
-_Holiday boost_: Holidays increase casual demand by exp(0.58) ≈ 78% increase, validating leisure-rider targeting.
+-   **Hour of day**: Casual usage peaks strongly between 13:00 and 17:00, with coefficients around 1.7–1.8, corresponding to roughly 5–6× higher demand than midnight. Demand remains elevated into the evening (e.g., 18:00: ~5×, 19:00: ~4×) but tapers down gradually. This reflects a leisure/tourism pattern rather than commuter behavior.
+-   **Temperature**: Moving from a cold to a warm day (e.g. a 0.6 increase in the scaled temperature variable) multiplies casual demand by exp(2.15 × 0.6) ≈ 3.5×, showing strong weather sensitivity.
+-   **Annual growth**: In 2012, casual demand is exp(0.37) ≈ 1.45× higher than in 2011 after controlling for other factors – about 45% year-over-year growth in casual usage.
+-   **Holiday boost**: Holidays increase casual demand by exp(0.575) ≈ 1.78×, i.e. about +78%, confirming that holidays behave like “super-weekends” for leisure riders.
 
-### Business Value: Target mid-day marketing campaigns for tourists/leisure riders during holidays, especially on warm days.
+### Business Value
 
-The Poisson model predicts casual rider demand with ±14 bikes accuracy on average and captures 73% of demand patterns. This enables reliable weekend capacity planning and holiday staffing adjustments, though real-time adjustments may still be needed for unexpected events. 
+- **Specific Marketing Campaigns**: Target mid-day and afternoon marketing campaigns toward tourists and leisure riders, especially on holidays and warm days when casual demand surges most strongly.
+- **Operational Reliability and Capacity Planning**: From an operational perspective, the Poisson model predicts casual rider demand with an average error of roughly ±14 bikes per hour and captures approximately 73% of demand patterns. This level of predictive reliability supports weekend and holiday capacity planning, staffing, and redistribution decisions, while still allowing for real-time adjustment during unusual events (e.g., storms or festivals).
+- **Casual Growth**: Importantly, the model reveals clear year-over-year growth in casual ridership. This sustained increase suggests that casual riders are not just opportunistic users but a strategic growth segment. As adoption expands, particularly among tourists and leisure riders, Capital Bikeshare may benefit from incremental fleet expansion and peak-season inventory increases to avoid shortages at high-demand destinations such as parks, museums, and waterfront stations.
 
-## Generalized Linear Models – Binomial
+## Binomial Generalized Linear Model - User Composition
 
-To analyze **who drives demand** at different times, we model the probability that an individual ride in a given hour is from a **registered user** rather than a casual rider.  
-Each hour consists of a number of “trials” (rides), where each outcome is either **registered** (success) or **casual** (failure).  
-This formulation satisfies the requirements of a **Binomial GLM with a logit link**.
+To analyze who drives demand at different times, we model the probability that an individual ride in a given hour is from a registered user rather than a casual rider.
+Each hour consists of a number of “trials” (rides), where each outcome is either registered (success) or casual (failure).
 
-```{r glm-binomial, message=FALSE, warning=FALSE}
+```{r glm-binomial, message=FALSE, warning=FALSE, class.source = "fold-show"}
 
 # Define binomial response: successes = registered; failures = casual
 train$reg_count   <- train$registered
@@ -513,7 +507,7 @@ if (file.exists("../models/glm_binomial.rds")) {
 } else {
   glm_binomial <- glm(
     cbind(reg_count, total_count - reg_count) ~
-      season + hour + holiday + workingday + weather + temp + humidity,
+      season + year + hour + holiday + weekday + weather + temp + humidity + windspeed,
     family = binomial(link = "logit"),
     data   = train
   )
@@ -530,48 +524,38 @@ glm_binom_pred_class <- ifelse(glm_binom_prob > 0.5, "registered-majority", "cas
 glm_binom_true_class <- ifelse(test$registered > test$casual, "registered-majority", "casual-majority")
 glm_binom_accuracy   <- mean(glm_binom_pred_class == glm_binom_true_class)
 
-cat("Binomial GLM accuracy:", round(glm_binom_accuracy, 3), "\n")
+glm_binomial_coefs
 
-kable(
-  glm_binomial_coefs,
-  digits  = 3,
-  caption = "Binomial GLM – Probability that a rider is registered"
-)
+cat("Binomial GLM accuracy:", round(glm_binom_accuracy, 3), "\n")
 ```
 
 ### Interpretation
 
-**Baseline Prediction**: Under winter, midnight, non-holiday, non-working-day, clear-weather conditions, the model predicts a **registered-user share of ~87%** (exp(1.942)).
+**Baseline Prediction**: Under winter, midnight, non-holiday, non-working-day, clear-weather conditions, the model predicts a registered-user share of 86%.
 
 **Key Demand Drivers**:
 
-- **Workingday**: Registered riders increase by **exp(0.911) ≈ 2.49×**, confirming strong commuter dominance.  
-- **Hour of day**: Morning peaks (5–8am) expand registered share (**exp(0.64–0.93) ≈ 1.9–2.5×**).  
-  Midday (10–15h) reduces registered share by **exp(–0.47 to –0.65) ≈ 40–48%**.  
-- **Season**: Spring/Summer reduce registered usage by **exp(–0.303 to –0.092) ≈ 9–26%**, reflecting higher casual/tourist activity.  
-- **Weather**: Light rain/snow increases registered share by **exp(0.171) ≈ 1.19×** as casual users drop off more quickly.  
-- **Temperature**: Warmer conditions reduce registered demand by **exp(–1.513) ≈ 0.22×**, a strong **78% shift** toward casual riders.
+-   **Weekday**: Registered riders commute on weekdays much more than on saturday and sundays, confirming strong commuter dominance.
+-   **Hour of day**: During the morning peak (5–8 AM), the likelihood of being registered riders nearly doubles, while during midday (10 AM–3 PM), that registered dominance drops by about half as casual riders take over the system.
+-   **Season**: Spring and Summer reduce the registered share relative to winter by exp(-0.285 to -0.064), representing a 6–25% reduction in odds, reflecting higher casual/tourist activity.
+-   **Weather**: Light rain/snow increases the registered share by exp(0.151), 1.16× odds, as casual users drop off more quickly than commuters.
+-   **Temperature**: Warmer conditions reduce the registered share by exp(-1.550), 0.21× odds, a strong 79% shift toward casual riders for every unit increase in normalized temperature.
 
-Overall, the model achieves **high accuracy**, capturing clear commuter vs. leisure behavior patterns across time, weather, and seasonality.
+Overall, the model achieves high accuracy, capturing clear commuter vs. leisure behavior patterns across time, weather, and seasonality.
 
 ### Business Value
 
-This model identifies **who uses the service under which conditions**, enabling targeted operational and marketing actions:
+This model identifies who uses the service under which conditions, enabling targeted operational and marketing actions:
 
-- **Commuter segments**: Morning and working-day peaks support corporate plans, commuter passes, and weekday-focused resource allocation.  
-- **Tourist/leisure segments**: Warm midday hours are dominated by casual riders → ideal for tourist promotions, flexible passes, and leisure-focused campaigns.  
-- **Weather-aware planning**: Rain increases registered share; warm sunny days increase casual demand → adjust supply accordingly.  
-- **Operational optimization**: Redistribute bikes based on dominant rider type—commuter routes in the morning, leisure/tourist zones in warm afternoons.
+-   **Commuter segments**: High accuracy in predicting morning and working-day peaks supports corporate plans, commuter passes, and weekday-focused resource allocation.
+-   **Tourist/leisure segments**: Warm midday hours are dominated by casual riders, ideal for tourist promotions, flexible passes, and leisure-focused campaigns.
+-   **Operational optimization**: The 97.2% accuracy allows the system to confidently redistribute bikes based on the dominant rider type, prioritizing commuter routes in the morning and leisure/tourist zones during warm afternoons.
 
-##
+## Generalized Additive Model - Nonlinear Weather Impacts on Demand 
 
-## Generalized Additive Model (GAM)
+To capture nonlinear relationships between weather conditions and bike demand, we use a Generalized Additive Model (GAM). This model allows flexible smooth functions for temperature, humidity, and wind speed, while keeping seasonal and calendar effects linear. GAMs are ideal when relationships are curved or seasonal patterns vary gradually.
 
-To capture **nonlinear relationships** between weather conditions and bike demand, we use a **Generalized Additive Model (GAM)**.  
-This model allows **flexible smooth functions** for temperature, perceived temperature, humidity, and wind speed, while keeping seasonal and calendar effects linear.  
-GAMs are ideal when relationships are curved or seasonal patterns vary gradually.
-
-```{r gam-model, message=FALSE, warning=FALSE}
+```{r gam-model, message=FALSE, warning=FALSE, class.source = "fold-show"}
 
 
 # Load or fit the GAM model
@@ -581,83 +565,64 @@ if (file.exists("../models/gam_model.rds")) {
   gam_model <- gam(
     count ~ 
       s(temp) +
-      s(atemp) +
       s(humidity) +
       s(windspeed) +
-      season + month + hour + holiday + workingday + weather,
+      season + year + hour + holiday + weekday + weather,
     data = train,
     family = poisson(link = "log")
   )
   saveRDS(gam_model, "../models/gam_model.rds")
 }
 
-gam_summary <- summary(gam_model)
+summary(gam_model)
 
-kable(
-  gam_summary$p.table,
-  digits  = 3,
-  caption = "GAM – Parametric Terms"
+# Predictions and performance
+gam_pred <- predict(gam_model, newdata = test, type = "response")
+gam_rmse <- sqrt(mean((test$count - gam_pred)^2))
+gam_mae  <- mean(abs(test$count - gam_pred))
+gam_r_squared <- cor(test$count, gam_pred)^2
+
+cat(
+  "GAM Performance:\n",
+  "RMSE: ", round(gam_rmse, 2), "\n",
+  "MAE:  ", round(gam_mae, 2), "\n",
+  "R²:   ", round(gam_r_squared, 2)
 )
 
-kable(
-  gam_summary$s.table,
-  digits  = 3,
-  caption = "GAM – Smooth Terms"
-)
 ```
 
 ### Interpretation
 
-**Baseline Prediction**: In winter, during January, at midnight on a non-working, non-holiday with clear weather, the GAM predicts an average demand of **exp(3.813) ≈ 45 bikes per hour**.
+**Baseline Prediction**: In winter, at midnight on a non-working, non-holiday with clear weather, the GAM predicts an average demand of exp(3.813) ≈ 45 bikes per hour.
 
 **Key Demand Drivers**:
 
-- **Season**: Compared to winter, demand increases by  
-  **exp(0.260) ≈ 1.30× in spring**, **exp(0.313) ≈ 1.37× in summer**, and  
-  **exp(0.473) ≈ 1.60× in fall**, confirming overall higher usage in warmer seasons.
+-   **Season**: Compared to winter, demand increases by exp(0.243) ≈ 1.27× in spring, exp(0.249) ≈ 1.28× in summer, and exp(0.376) ≈ 1.46× in fall, confirming overall higher usage in warmer seasons.
+-   **Hour of day**: Demand is very low in the early night (e.g., hour 3: $\beta$ = –1.465). From the morning commute onwards it rises sharply, with peaks around hour 8 ($\beta$ = 1.931 → exp ≈ 6.9×) and hour 17/18 ($\beta$ = 2.036 → exp ≈ 7.6×) relative to midnight, capturing strong rush-hour patterns.
+-   **Holidays and Weekdays**: Holidays slightly reduce demand ($\beta$ = –0.145 → exp ≈ 0.86×). Working days show a small positive effect; for example, Friday increases demand by exp(0.099) ≈ 1.10×.
+-   **Weather (parametric)**: Mist/Cloudy conditions have a small negative effect ($\beta$ = –0.047 → exp ≈ 0.95×). Light rain or snow reduces expected demand by about 33.5% ($\beta$ = –0.408 → exp ≈ 0.665×), while severe storms reduce it by approximately 24.3% ($\beta$ = -0.278 → exp ≈ 0.757×).
 
-- **Hour of day**:  
-  Demand is very low in the early night (e.g. hour 3: β = –1.443).  
-  From the morning commute onwards it rises sharply, with peaks around  
-  **hour 8 (β = 1.933 → exp ≈ 6.9×)** and **hour 17 (β = 1.974 → exp ≈ 7.2×)**  
-  relative to midnight, capturing strong rush-hour patterns.
+**Smooth weather effects (nonlinear terms)**: All smooth terms are highly significant (p < 2e-16), showing strong nonlinear relationships:
+- **s(temp)**: Demand rises steeply from cold to mild conditions and then flattens or slightly declines at very high temperatures.
+- **s(humidity)**: Moderate humidity supports demand, while very high humidity strongly reduces it.
+- **s(windspeed)**: Light wind has little impact, but higher wind speeds reduce demand in a nonlinear way.
 
-- **Holiday & Workingday**:  
-  Holidays slightly reduce demand (**β = –0.122 → exp ≈ 0.89×**),  
-  while working days have a small positive effect (**β = 0.019 → exp ≈ 1.02×**).
-
-- **Weather (parametric)**:  
-  Mist/Cloudy conditions have a small negative effect (**β = –0.025 → exp ≈ 0.98×**).  
-  Light rain or snow reduces expected demand by about **30%**  
-  (**β = –0.351 → exp ≈ 0.70×**), while severe storms have only a minor additional effect.
-
-- **Smooth weather effects** (nonlinear terms):  
-  All smooth terms are highly significant (p < 0.001), showing strong nonlinear relationships:  
-  - *s(temp)* and *s(atemp)*: Demand rises steeply from cold to mild conditions and then flattens or slightly declines at very high temperatures.  
-  - *s(humidity)*: Moderate humidity supports demand, while very high humidity strongly reduces it.  
-  - *s(windspeed)*: Light wind has little impact, but higher wind speeds reduce demand in a nonlinear way.
-
-Overall, the GAM captures both **sharp hourly peaks** and **smooth nonlinear weather effects**, improving the fit compared to purely linear models.
+Overall, the GAM captures both sharp hourly peaks and smooth nonlinear weather effects, improving the fit compared to purely linear models, as evidenced by a Deviance explained of 81.3% and an R² of 0.77.
 
 ### Business Value
 
-The GAM provides a detailed picture of **how many bikes are needed under specific weather and time conditions**:
+The GAM provides a detailed picture of how many bikes are needed under specific weather and time conditions:
 
-- **Weather-sensitive planning**: Operators can anticipate demand spikes when temperatures move from cold to mild and prepare for drops during heavy rain, high humidity, or strong winds.  
-- **Rush-hour capacity management**: Clear peak factors (up to ~7× midnight demand) support precise staffing and bike rebalancing during morning and evening commutes.  
-- **Seasonal and promotional timing**: Higher demand in spring, summer, and fall, combined with temperature–humidity curves, helps schedule **leisure-focused campaigns and discounts** when riders are most responsive.  
-- **Resilient operations**: By modelling nonlinear responses, the GAM enables more robust forecasting for unusual weather days, reducing both shortages and excess idle bikes.
-
-
-##
-
+-   **Weather-sensitive planning**: Operators can anticipate demand spikes when temperatures move from cold to mild and prepare for drops during heavy rain, high humidity, or strong winds.
+-   **Rush-hour capacity management**: Clear peak factors (up to ~7× midnight demand) support precise staffing and bike rebalancing during morning and evening commutes.
+-   **Seasonal and promotional timing**: Higher demand in spring, summer, and fall, combined with temperature–humidity curves, helps schedule leisure-focused campaigns and discounts when riders are most responsive.
+-   **Resilient operations**: By modelling nonlinear responses, the GAM enables more robust forecasting for unusual weather days, reducing both shortages and excess of bikes.
 
 ## Neural Network - High Demand Classification
 
-Neural networks excel at complex pattern recognition for binary outcomes. We predict whether demand will be "High" (above median).
-A single-hidden-layer neural network (8 neurons) was selected, as this architecture is sufficient for low-dimensional tabular data and avoids overfitting. Model tuning experiments showed that adding more layers did not meaningfully improve classification performance relative to the baseline GLM.
+Neural networks are well suited for recognizing complex patterns in the data. In our case, the model predicts whether demand will be High (above the median) or Low. A compact neural network with a single hidden layer (8 neurons) was selected, which is sufficient for this type of tabular forecasting problem without introducing unnecessary complexity. Additional experiments showed that deeper architectures did not deliver noticeable gains in classification performance, making the simpler configuration both effective and efficient for Capital Bikeshare’s forecasting needs.
 
-```{r nn-model, cache=TRUE, dependson="train-test-split"}
+```{r nn-model, cache=TRUE, dependson="train-test-split", class.source = "fold-show"}
 ## Prepare data with numeric predictors only with binary levels set at 0,1
 train_nn <- train %>%
   mutate(
@@ -666,7 +631,8 @@ train_nn <- train %>%
     hour_num = as.numeric(hour),
     holiday_num = as.numeric(holiday) - 1,
     weather_num = as.numeric(weather),
-    high_demand_num = as.numeric(high_demand) - 1
+    high_demand_num = as.numeric(high_demand) - 1,
+    weekday_num = as.numeric(weekday)
   )
 
 test_nn <- test %>%
@@ -676,7 +642,8 @@ test_nn <- test %>%
     hour_num = as.numeric(hour),
     holiday_num = as.numeric(holiday) - 1,
     weather_num = as.numeric(weather),
-    high_demand_num = as.numeric(high_demand) - 1
+    high_demand_num = as.numeric(high_demand) - 1,
+    weekday_num = as.numeric(weekday)
   )
 
 ## Check if model already exists
@@ -684,8 +651,8 @@ if (file.exists("../models/nn_model.rds")) {
   nn_model <- readRDS("../models/nn_model.rds")
 } else {
   ## Fit neural network (single hidden layer with 8 nodes)
-  nn_model <- nnet(high_demand_num ~ season_num + year_num + hour_num + 
-                     holiday_num + weather_num + temp + humidity + windspeed,
+  nn_model <- nnet(high_demand_num ~ season_num + year_num + hour_num + holiday_num
+                   + weather_num + temp + humidity + windspeed + weekday_num,
                    data = train_nn,
                    size = 8,
                    maxit = 200,
@@ -708,83 +675,248 @@ nn_accuracy <- nn_conf_metrics$overall['Accuracy']
 print(nn_conf_metrics)
 ```
 
-###Interpretation
+### Interpretation
 
-The model captures complex relationships and interactions, achieving 87.8% balanced accuracy, confirming that the model performs consistently across both high and low demand classes. It successfully identifies 91% of high-demand hours. This enables proactive bike redistribution, though 276 false alarms (15% false positive rate) suggest occasional over-preparation. 
+The model captures complex relationships and interactions, achieving 91% balanced accuracy, confirming that the model performs consistently across both high and low demand classes. It successfully identifies 93% of high-demand hours. This enables proactive bike redistribution, though 193 false alarms (11% false positive rate) suggest occasional over-preparation.
 
-###Business Value: Trigger alerts for high-demand shifts, enabling proactive bike redistribution.
+### Business Value
 
-This model is appropriate for operational planning because underestimating demand is more costly than over-preparing.
+Trigger alerts for high-demand shifts, enabling proactive bike redistribution. This model is appropriate for operational planning because underestimating demand is more costly than over-preparing. For this reason, we do not only look at the accuracy but also at the sensitivity, which in this case is even higher than the accuracy.
 
-## Support Vector Machine - Robust Demand Classification
+## Support Vector Machine and Cross Validation - High Demand Classification
 
-```{r}
+Additional to the conclusions drawn from the Neural Networks, we provide a complementary perspective by comparing a Linear Support Vector Machine with a Radial Support Vector Machine, and subsequently validating the results using Cross-Validation.
 
+### Linear vs. Radial SVM
+
+A Linear Support Vector Machine is well-suited when the separation between high and low demand can be approximated by a straight decision boundary. In contrast, a Radial Support Vector Machine offers more flexibility, as the radial basis function introduces an additional non-linear transformation of the feature space, allowing for curved or more complex separation boundaries.
+
+```{r, class.source = "fold-show"}
+# Used e1071
+# Check if model already exists
+if (file.exists("../models/svm_linear.rds")) {
+  svm_linear <- readRDS("../models/svm_linear.rds")
+} else {
+
+# Fit linear SVM with default cost 1
+svm_linear <- svm(
+  high_demand ~ season + year + hour + holiday + weekday +
+    weather + temp + humidity + windspeed,
+  data = train,
+  kernel = "linear",
+  cost = 1 #default
+) 
+  ## Save model
+  saveRDS(svm_linear, "../models/svm_linear.rds")
+}
+
+pred_linear <- predict(svm_linear, newdata = test)
+
+cm_linear <- confusionMatrix(
+  data = factor(pred_linear, levels = c("Low", "High")),
+  reference = factor(test$high_demand, levels = c("Low", "High")),
+  positive = "High"
+)
+
+cm_linear
+svm_linear_accuracy <- cm_linear$overall['Accuracy']
 ```
 
-**Interpretation**:
+```{r, class.source = "fold-show"}
+# Used e1071
+# Check if model already exists
+if (file.exists("../models/svm_radial.rds")) {
+  svm_radial <- readRDS("../models/svm_radial.rds")
+} else {
 
-**Business Value**: Provides complementary classification for ensemble decision-making; reduces false negatives (mi
+# Fit radial SVM with default cost 1 and default gamma 1/number of predictor variables
+#(in this case 40 e.g. hours are counted as 24 already)
+svm_radial<- svm(
+  high_demand ~ season + year + hour + holiday + weekday +
+    weather + temp + humidity + windspeed,
+  data = train,
+  kernel = "radial",
+  cost = 1, #default
+  gamma = 1/40 #default
+)
 
-\newpage
+  ## Save model
+  saveRDS(svm_radial, "../models/svm_radial.rds")
+}
 
-# Model Comparison and Cross-Validation
+pred_radial <- predict(svm_radial, newdata = test)
 
-```{r}
+cm_radial <- confusionMatrix(
+  data = factor(pred_radial, levels = c("Low", "High")),
+  reference = factor(test$high_demand, levels = c("Low", "High")),
+  positive = "High"
+)
 
+cm_radial
+svm_radial_accuracy <- cm_radial$overall['Accuracy']
 ```
 
-**Findings**:
+The initial SVM models achieved prediction accuracies of approximately 88.3% for the Linear kernel and 87.7% for the Radial kernel, meaning that both approaches are already able to distinguish between high and low demand periods about 88% of the time. Since the Linear SVM performed slightly better and is also simpler to compute, it would be the preferred model at this early stage. However, these results were obtained using default settings and without tuning the cost (C) or gamma parameters that control model flexibility. In the next section, we will optimize these hyperparameters more systematically. As a result, these baseline figures should be viewed as preliminary: performance may improve once the models are tuned to better reflect Capital Bikeshare’s demand patterns.
+
+### Linear vs Radial SVM with Cross-Validation
+
+While the initial results suggest both SVM models perform well, they rely on a single train/test split. To ensure these results are not simply due to a favorable partition of the data, we apply cross-validation using the caret library. This allows us to more rigorously compare the Linear and Radial SVMs and to tune the relevant hyperparameters (C for both models and gamma for the Radial kernel).
+
+Using 5-fold cross-validation provides a more reliable indication of how each model is likely to perform in future demand scenarios, an important consideration for Capital Bikeshare as demand fluctuates with weather, season, and time of day.
+
+```{r, class.source = "fold-show"}
+# Used caret
+cv_control <- trainControl(
+  method = "cv",
+  number = 5
+)
+
+# Check if model already exists
+if (file.exists("../models/svm_linear_cv.rds")) {
+  svm_linear_cv<- readRDS("../models/svm_linear_cv.rds")
+} else {
+
+# Tune the cost hyperparameter
+svm_linear_cv <- train(
+  high_demand ~ season + year + hour + holiday + weekday +
+    weather + temp + humidity + windspeed,
+  data = train,
+  method = "svmLinear",
+  trControl = cv_control,
+  preProcess = c("center", "scale"),
+  tuneGrid = expand.grid(C = c(0.01, 0.1, 1, 10, 100)),
+  metric = "Accuracy"
+)
+
+  ## Save model
+  saveRDS(svm_linear_cv, "../models/svm_linear_cv.rds")
+}
+
+svm_linear_cv
+svm_linear_cv_accuracy <- max(svm_linear_cv$results$Accuracy)
+```
+
+```{r, class.source = "fold-show"}
+# Used caret
+# Check if model already exists
+if (file.exists("../models/svm_radial_cv.rds")) {
+  svm_radial_cv<- readRDS("../models/svm_radial_cv.rds")
+} else {
+
+# Tune the cost and sigma (gamma) hyperparameter
+svm_radial_cv <- train(
+  high_demand ~ season + year + hour + holiday + weekday +
+    weather + temp + humidity + windspeed,
+  data = train,
+  method = "svmRadial",
+  trControl = cv_control,
+  preProcess = c("center", "scale"),
+  tuneGrid = expand.grid(
+    C = c(0.1, 1, 10, 100),
+    sigma = c(0.01, 0.025, 0.05, 0.1) #in the default one it was 0.025 (1/40)
+  ),
+  metric = "Accuracy"
+)
+
+  ## Save model
+  saveRDS(svm_radial_cv, "../models/svm_radial_cv.rds")
+}
+
+svm_radial_cv
+svm_radial_cv_accuracy <- max(svm_radial_cv$results$Accuracy)
+```
+
+```{r,fig.show="hold"}
+svm_compare <- resamples(
+  list(
+    Linear_SVM = svm_linear_cv,
+    Radial_SVM = svm_radial_cv
+  )
+)
+
+summary(svm_compare)
+bwplot(svm_compare)
+```
+
+#### Interpretation
+
+Cross-validation revealed a clear performance difference between the two SVM models. The Linear SVM, tuned with C = 10, achieved an average accuracy of 88.4% with a Kappa of 0.78, whereas the Radial SVM reached 93.2% accuracy and a Kappa of 0.86 using C = 10 and sigma = 0.01. The Radial model also showed lower variability across folds, indicating greater stability. The higher Kappa values are meaningful, as Kappa quantifies how much better the model performs compared to random guessing; values above 0.80 typically indicate strong agreement. These results imply that demand patterns exhibit non-linear structure, which the Radial kernel captures more effectively. This comparison highlights the importance of applying cross-validation and tuning hyperparameters, as performance improved substantially compared to untuned, single split models and produced more reliable estimates of how the models would perform on future data.
+
+#### Business Value
+
+From a business perspective, more accurate and stable demand forecasts help Capital Bikeshare ensure availability during high-demand periods and avoid excess inventory during low-demand periods, improving rebalancing decisions, staffing, and operational efficiency.
 
 ## Overall Model Performance Summary
 
-```{r}
+```{r performance-summary}
+# Compile all performance metrics
+performance <- data.frame(
+  Model = c("Linear Model", "GAM", "Poisson GLM", "Binomial GLM", 
+            "Neural Network", "Linear SVM", "Radial SVM", "Linear SVM with CV", "Radial SVM with CV"),
+  Task = c("Total Demand", "Total Demand", "Casual Users", "User Composition",
+           "High Demand Class", "High Demand Class", "High Demand Class", "High Demand Class", "High Demand Class"),
+  Metric = c(paste("RMSE:", round(lm_rmse, 2)),
+             paste("RMSE:", round(gam_rmse, 2)),
+             paste("RMSE:", round(glm_quasipois_rmse, 2)),
+             paste("Accuracy:", round(glm_binom_accuracy * 100, 1), "%"),
+             paste("Accuracy:", round(nn_accuracy * 100, 1), "%"),
+             paste("Accuracy:", round(svm_linear_accuracy * 100, 1), "%"),
+             paste("Accuracy:", round(svm_radial_accuracy * 100, 1), "%"),
+             paste("Accuracy:", round(svm_linear_cv_accuracy * 100, 1), "%"),
+             paste("Accuracy:", round(svm_radial_cv_accuracy * 100, 1), "%")),
+  Business_Use = c("Daily forecasting", "Weather-sensitive forecasting",
+                   "Marketing targeting", "Membership strategy",
+                   "Alert system", "Operational planning", "Operational planning", "Operational planning", "Operational planning")
+)
 
+performance %>%
+  kable(caption = "Overall Model Performance Summary", align = "llll") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
-
-\newpage
 
 # Conclusions
 
-## Key Findings
+The predictive models developed in this study provide Capital Bikeshare with a powerful toolkit for proactive decision-making. By employing specialized models for different operational needs, the system can transition from reactive troubleshooting to anticipated planning. These models are designed to be fed with forecasted variables like weather, holidays, and temporal data, making the system completely adjustable for predicting future needs and ensuring resources are always aligned with both commuters and leisure riders.
 
-## Operational Recommendations
+1. **Repairs, storage, and rebalancing:** Temporarily storing part of the fleet indoors during winter or during cold, snowy, or stormy weather protects the bikes from damage and reduces unnecessary outdoor exposures. This leads to lower long-term maintenance costs and ensures more bikes are in good condition when peak season arrives. Low-demand periods can also be used for repairs and for rebalancing inventory across stations.
 
-## Limitations
+2. **Align supply with predictable commuter and leisure patterns:** Ensure bikes are available at commuter-heavy stations around 8:00 AM and 5–6:00 PM, and at leisure/tourist hubs during the early afternoon (roughly 1–5 PM).
 
-## Future Work
+3. **Maintain operational buffers:** Keep sufficient slack in the system to absorb spikes in usage, delays in rebalancing, and unexpected shifts in demand.
 
-\newpage
+4. **Focus mid-day marketing on leisure users:** Mid-day and afternoon promotional efforts are likely most effective when aimed at tourists and casual riders, particularly on warm days, weekends, and holidays, when casual demand increases most noticeably.
 
-# Use of Generative AI
+5. **Consider long-term fleet growth in leisure zones:** The model shows year-over-year increases in both registered and casual ridership, with especially strong gains among casual users. Gradual fleet expansion, particularly at parks, museums, waterfront areas, and other leisure-oriented stations, may be beneficial.
 
-## How We Used Generative AI
+Overall, these results point to practical strategies that can be tested immediately. By utilizing the specific strengths of each model—from nonlinear weather analysis to high-demand classification, Capital Bikeshare can incorporate live variables such as weather forecasts and holiday schedules to adjust operations in advance. This multifaceted modeling framework makes it possible to look into the future, anticipate demand surges, and precisely inform how the system should respond in real time.
 
-We used Generative AI strictly as a **supportive tool** to complement our own work. For all modelling, coding, and interpretation tasks, we first attempted to solve them independently. We only consulted AI when we needed clarification of error messages, help understanding unexpected behaviour in RMarkdown, or assistance rephrasing text to improve clarity. All statistical decisions, model specifications, and implementations were fully developed by us.
+However, to ensure long-term success, several limitations and future considerations must be taken into account:
 
-### How we used Generative AI
-We relied on AI only to:
-- clarify small, practical issues (e.g., RMarkdown chunk formatting, syntax questions),
-- rephrase or refine text that we had already written for better readability,
-- obtain short reminders of concepts we already understood from the lectures.
+* **Geographic Specificity**: This study utilized hourly aggregates which mask significant station-level variations; obtaining the specific locations of the docks and stations would be highly valuable for developing neighborhood-specific models and improving redistribution logistics.
+* **Data Recency**: The analysis is based on data from 2011 and 2012. More recent data would be instrumental, as modern post-pandemic transit behaviors and system expansions may differ significantly from these historical patterns.
+* **Temporal Precision**: While hourly predictions capture broad trends, moving toward finer temporal granularity, such as 15-minute intervals, would be ideal for managing intra-hour variability during peak periods and further optimizing fleet readiness.
 
-### What was easy vs. challenging
-AI was useful for simple and well-defined questions, but it was **not capable of evaluating theoretical correctness**. For example, during the Binomial GLM section, AI could give general explanations, but determining whether our response variable and predictors met the theoretical requirements for a proper binomial model was only possible after revisiting the **lecture notes and course material**. This conceptual validation required our own understanding and could not be outsourced.
+# Teamcontributions and use of Generative AI
 
-### Critical reflection
-Throughout the project, we made sure to:
-- carefully review any explanations provided by AI,
-- ensure that our interpretations were consistent with our dataset and modelling framework,
-- verify all clarifications against the theory taught in class,
+## Teamcontributions
+
+This project was completed collaboratively, with all members working together throughout the data preparation, analysis, modelling, and report writing process. While the work was shared collectively, each group member took the lead on the following models:
+
+-   **Ana**: Linear Model (LM), Support Vector Machine (SVM) with Cross Validation
+-   **Vani**: Generalized Linear Model (Poisson), Neural Network (NN)
+-   **Mayra**: Generalized Linear Model (Binomial), Generalized Additive Model (GAM)
+
+All major decisions, interpretations, and final editing were discussed and completed jointly as a team.
+
+## Use of Genarative AI
+
+We used Generative AI strictly as a supportive tool to complement our own work. For all modelling, coding, and interpretation tasks, we first attempted to solve them independently with help of the different labs seen in class. We only consulted AI when we needed clarification of error messages, help understanding unexpected behaviour in RMarkdown, or assistance rephrasing text to improve clarity. All statistical decisions, model specifications, and implementations were fully developed by us.
+
+**Easy vs challenging**: AI was useful for simple and well-defined questions, but it was not capable of evaluating theoretical correctness. For example, during the Binomial GLM section, AI could give general explanations, but determining whether our response variable and predictors met the theoretical requirements for a proper binomial model was only possible after revisiting the lecture notes and course material. This conceptual validation required our own understanding and could not be outsourced.
+
+**Critical reflection**: Throughout the project, we made sure to:
+- carefully review any explanations provided by AI
+- ensure that our interpretations were consistent with our dataset and modelling framework - verify all clarifications against the theory taught in class
 - maintain a unified writing style across team members and avoid any overly “AI-like” phrasing.
 
-Overall, Generative AI provided limited but helpful support for **minor clarifications and text refinement**, while all core modelling work, statistical reasoning, and final decisions were entirely carried out by us based on the course content.
-
-
-\newpage
-
-# Appendix: Session Information
-
-```{r session-info}
-sessionInfo()
-```
+Overall, Generative AI provided limited but helpful support for minor clarifications and text refinement, while all core modelling work, statistical reasoning, and final decisions were entirely carried out by us based on the course content.
